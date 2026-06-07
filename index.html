@@ -1,0 +1,3431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pip the Penguin — Biome Quest</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0b1020; font-family: 'Segoe UI', system-ui, sans-serif; }
+  #game { width: 100vw; height: 100vh; display: block; }
+
+  .overlay {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    color: #fff; z-index: 10; padding: 24px;
+    background: radial-gradient(circle at 50% 30%, rgba(30,50,90,0.85), rgba(8,12,28,0.96));
+    backdrop-filter: blur(3px);
+  }
+  .overlay h1 { font-size: clamp(32px, 7vw, 72px); letter-spacing: 2px; text-shadow: 0 4px 24px rgba(0,0,0,0.6); margin-bottom: 8px; }
+  .overlay h1 .accent { color: #ffd34d; }
+  .overlay p { font-size: clamp(15px, 2.2vw, 20px); max-width: 620px; line-height: 1.6; color: #cfe0ff; margin: 6px 0; }
+  .btn {
+    margin-top: 26px; padding: 14px 38px; font-size: 20px; font-weight: 700;
+    color: #082; background: linear-gradient(180deg,#ffe680,#ffc233); border: none;
+    border-radius: 999px; cursor: pointer; box-shadow: 0 8px 0 #c8920f, 0 14px 28px rgba(0,0,0,.45);
+    transition: transform .08s ease, box-shadow .08s ease; color:#5a3d00;
+  }
+  .btn:active { transform: translateY(6px); box-shadow: 0 2px 0 #c8920f, 0 6px 14px rgba(0,0,0,.4); }
+  .keys { margin-top: 22px; font-size: 15px; color: #9fb6e0; }
+  .keys kbd {
+    background: #1c2a4a; border: 1px solid #3a5388; border-radius: 6px;
+    padding: 3px 9px; margin: 0 2px; font-family: monospace; box-shadow: 0 2px 0 #0c1530;
+  }
+  .hidden { display: none !important; }
+
+  /* Title screen flourish */
+  @keyframes bob { 0%,100%{transform:translateY(0) rotate(-4deg)} 50%{transform:translateY(-22px) rotate(4deg)} }
+  @keyframes titleGlow {
+    0%,100%{ text-shadow:0 0 18px rgba(120,180,255,.55), 0 6px 26px rgba(0,0,0,.6); }
+    50%{ text-shadow:0 0 42px rgba(150,210,255,.95), 0 6px 26px rgba(0,0,0,.6); }
+  }
+  @keyframes btnPulse {
+    0%,100%{ box-shadow:0 8px 0 #c8920f, 0 14px 28px rgba(0,0,0,.45); }
+    50%{ box-shadow:0 8px 0 #c8920f, 0 14px 44px rgba(255,205,70,.55); }
+  }
+  .title-pop { font-size: clamp(80px, 17vw, 165px); line-height: 1; animation: bob 3s ease-in-out infinite; filter: drop-shadow(0 16px 22px rgba(0,0,0,.55)); }
+  .game-title { font-size: clamp(40px, 9vw, 86px); letter-spacing: 3px; animation: titleGlow 3.6s ease-in-out infinite; margin-top: -6px; }
+  .tagline { font-size: clamp(15px, 2.4vw, 22px); color:#bcd6ff; margin-top: 8px; max-width: 560px; }
+  #startBtn { font-size: 24px; padding: 16px 54px; margin-top: 30px; animation: btnPulse 2s ease-in-out infinite; }
+  .sub { margin-top: 16px; font-size: 14px; color:#90a8d0; letter-spacing:.5px; }
+
+  /* HUD */
+  #hud {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 5;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 14px 18px; color: #fff; pointer-events: none;
+    text-shadow: 0 2px 6px rgba(0,0,0,.7);
+  }
+  .hud-card {
+    background: rgba(10,18,38,0.55); border: 1px solid rgba(120,160,230,0.3);
+    border-radius: 14px; padding: 10px 16px; backdrop-filter: blur(4px);
+  }
+  #worldName { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
+  #levelName { font-size: 14px; color: #bcd0ff; }
+  #fishCount { font-size: 24px; font-weight: 800; }
+  #fishCount .lbl { font-size: 13px; font-weight: 600; color: #bcd0ff; }
+  #hint {
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+    z-index: 5; color: #ffe6a0; font-size: 17px; font-weight: 600;
+    background: rgba(10,18,38,0.6); padding: 8px 20px; border-radius: 999px;
+    text-shadow: 0 2px 6px rgba(0,0,0,.7); border:1px solid rgba(120,160,230,0.25);
+    transition: opacity .3s; pointer-events:none;
+  }
+  #worldDots { display:flex; gap:8px; margin-top:8px; justify-content:center; }
+  .dot { width:14px; height:14px; border-radius:50%; border:2px solid #ffd34d; }
+  .dot.done { background:#ffd34d; }
+  .flash {
+    position: fixed; inset: 0; z-index: 8; pointer-events: none;
+    display:flex; align-items:center; justify-content:center;
+    font-size: clamp(40px, 9vw, 110px); font-weight: 900; color:#fff;
+    text-shadow: 0 6px 30px rgba(0,0,0,.7); opacity:0; letter-spacing:3px;
+  }
+
+  /* Level select menu */
+  .ls-grid { display:flex; flex-direction:column; gap:12px; margin-top:18px; width:min(92vw,580px); max-height:62vh; overflow-y:auto; padding:4px; }
+  .ls-row { background:rgba(10,18,38,.55); border:1px solid rgba(120,160,230,.3); border-radius:14px; padding:12px 16px; }
+  .ls-world { font-weight:800; color:#cfe0ff; margin-bottom:8px; letter-spacing:.5px; font-size:15px; }
+  .ls-btns { display:flex; gap:10px; flex-wrap:wrap; }
+  .ls-btn { padding:8px 18px; font-size:16px; font-weight:700; border:none; border-radius:999px; cursor:pointer; color:#5a3d00; background:linear-gradient(180deg,#ffe680,#ffc233); box-shadow:0 4px 0 #c8920f; transition:transform .07s; }
+  .ls-btn:hover:not(.locked) { filter:brightness(1.07); }
+  .ls-btn:active:not(.locked) { transform:translateY(3px); box-shadow:0 1px 0 #c8920f; }
+  .ls-btn.boss { background:linear-gradient(180deg,#ff9a8a,#ff5a6a); color:#5a0010; box-shadow:0 4px 0 #a8202e; }
+  .ls-btn.cleared::after { content:' ✓'; color:#1d7a2e; }
+  .ls-btn.locked { background:#2a3a55; color:#6a7da0; box-shadow:0 4px 0 #1a2740; cursor:not-allowed; }
+  .ls-btn { transition: transform .09s ease, filter .09s ease; }
+  .ls-btn:hover:not(.locked) { transform: scale(1.07); filter: brightness(1.08); }
+
+  /* Level preview panel */
+  .ls-wrap { display:flex; gap:18px; align-items:flex-start; justify-content:center; flex-wrap:wrap; margin-top:16px; }
+  #levelPreview { width:248px; background:rgba(8,14,30,.72); border:1px solid rgba(120,160,230,.4); border-radius:16px; padding:14px; color:#dceaff; box-shadow:0 0 28px rgba(70,130,230,.3); }
+  #previewCanvas { width:220px; height:150px; border-radius:10px; display:block; box-shadow:inset 0 0 0 1px rgba(255,255,255,.12); }
+  #previewTitle { font-weight:800; margin:10px 0 5px; font-size:17px; letter-spacing:.5px; }
+  #previewStats { font-size:13px; color:#bcd0ff; line-height:1.8; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud" class="hidden">
+  <div class="hud-card">
+    <div id="worldName">Iceland</div>
+    <div id="levelName">Level 1</div>
+  </div>
+  <div class="hud-card" style="text-align:center">
+    <div id="hearts" style="font-size:20px;letter-spacing:2px">❤️❤️❤️</div>
+    <div id="fishCount"><span id="fishGot">0</span>/<span id="fishTotal">0</span> <span class="lbl">🥚 EGGS</span></div>
+  </div>
+  <div class="hud-card" id="weaponCard" style="text-align:right; visibility:hidden">
+    <div id="weaponName" style="font-size:20px;font-weight:800">—</div>
+    <div id="weaponAmmo" class="lbl"></div>
+    <div style="height:5px;width:120px;background:#22304e;border-radius:3px;margin-top:6px;overflow:hidden;margin-left:auto">
+      <div id="chargeFill" style="height:100%;width:0%;background:linear-gradient(90deg,#ffd34d,#ff7a2a);transition:width .03s"></div>
+    </div>
+  </div>
+  <button id="menuBtn" style="position:fixed;bottom:16px;left:16px;z-index:6;pointer-events:auto;padding:9px 18px;border-radius:999px;font-weight:700;font-size:15px;cursor:pointer;border:1px solid rgba(120,160,230,.45);background:rgba(10,18,38,.72);color:#cfe0ff;text-shadow:0 1px 3px #000">☰ Menu</button>
+</div>
+<div id="hint" class="hidden"></div>
+<div id="flash" class="flash"></div>
+
+<div id="bossBar" style="position:fixed;top:84px;left:50%;transform:translateX(-50%);z-index:5;width:min(64vw,540px);visibility:hidden;text-align:center;color:#fff;text-shadow:0 2px 6px #000;pointer-events:none">
+  <div id="bossName" style="font-weight:800;letter-spacing:2px;font-size:16px">⚠️ BOSS</div>
+  <div style="height:16px;background:#3a1020;border:2px solid #ff5a6a;border-radius:9px;overflow:hidden;margin-top:3px;box-shadow:0 0 16px rgba(255,60,90,.5)">
+    <div id="bossFill" style="height:100%;width:100%;background:linear-gradient(90deg,#ff3b5a,#ff8a3a);transition:width .12s"></div>
+  </div>
+</div>
+
+<div id="gameOver" class="overlay hidden">
+  <h1>💔 GAME <span class="accent">OVER</span></h1>
+  <p>Pip ran out of hearts! Retry this level with a fresh set of ❤️❤️❤️.</p>
+  <p id="goScore" style="color:#ffd34d;font-size:20px;font-weight:800"></p>
+  <button class="btn" id="retryBtn">TRY AGAIN ↺</button>
+</div>
+
+<div id="startScreen" class="overlay">
+  <div class="title-pop">🐧</div>
+  <h1 class="game-title">PIP THE <span class="accent">PENGUIN</span></h1>
+  <p class="tagline">A frosty egg-rescue adventure across four wild worlds 🥚❄️🌋</p>
+  <button class="btn" id="startBtn">START ▶</button>
+  <button class="btn" id="levelSelectBtn" style="margin-top:14px;font-size:18px;padding:12px 36px;background:linear-gradient(180deg,#bcd0ff,#7fa0e0);box-shadow:0 6px 0 #4a6aa8;color:#10254a;animation:none">🗺️ LEVEL SELECT</button>
+  <button class="btn" id="bossRallyBtn" style="margin-top:14px;font-size:18px;padding:12px 36px;background:linear-gradient(180deg,#ff9a8a,#ff5a6a);box-shadow:0 6px 0 #a8202e;color:#5a0010;animation:none">⚔️ BOSS RALLY</button>
+  <button class="btn" id="shopBtn" style="margin-top:14px;font-size:18px;padding:12px 36px;background:linear-gradient(180deg,#b6e88a,#6fc23a);box-shadow:0 6px 0 #3f8a18;color:#143a08;animation:none">🛍️ SKIN SHOP</button>
+  <button class="btn" id="playgroundBtn" style="margin-top:14px;font-size:18px;padding:12px 36px;background:linear-gradient(180deg,#c8b6ff,#8a6fe0);box-shadow:0 6px 0 #5a3fa8;color:#1a0e3a;animation:none">🎮 PLAYGROUND</button>
+  <p class="sub">A quick tutorial will show you the ropes</p>
+</div>
+
+<div id="playground" class="overlay hidden">
+  <h1 style="font-size:clamp(28px,6vw,56px)">🎮 PLAY<span class="accent">GROUND</span></h1>
+  <p class="tagline" style="margin:2px 0">Practice your skills — no eggs, unlimited items, endless foes, no game-overs.</p>
+  <div id="pgGrid" class="ls-grid"></div>
+  <button class="btn" id="pgMenuBtn" style="margin-top:14px;font-size:17px;padding:11px 30px;background:linear-gradient(180deg,#bcd0ff,#7fa0e0);box-shadow:0 5px 0 #4a6aa8;color:#10254a">🏠 Main Menu</button>
+</div>
+
+<div id="shop" class="overlay hidden">
+  <h1 style="font-size:clamp(26px,5.5vw,52px)">🛍️ SKIN <span class="accent">SHOP</span></h1>
+  <p class="tagline" style="margin:2px 0">Earn 🥚 by collecting eggs — spend them on penguin skins!</p>
+  <p id="shopCoins" style="font-size:22px;font-weight:800;color:#ffd34d;margin:4px 0">🥚 0</p>
+  <div id="shopGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;width:min(94vw,640px);max-height:56vh;overflow-y:auto;padding:6px"></div>
+  <button class="btn" id="shopMenuBtn" style="margin-top:14px;font-size:17px;padding:11px 30px;background:linear-gradient(180deg,#bcd0ff,#7fa0e0);box-shadow:0 5px 0 #4a6aa8;color:#10254a">🏠 Main Menu</button>
+</div>
+
+<div id="levelComplete" class="overlay hidden">
+  <h1>LEVEL <span class="accent">CLEARED!</span></h1>
+  <p id="lcText">Nice waddling, Pip!</p>
+  <button class="btn" id="nextBtn">CONTINUE ▶</button>
+</div>
+
+<div id="worldComplete" class="overlay hidden">
+  <h1>🏆 WORLD <span class="accent">COMPLETE!</span></h1>
+  <p id="wcText"></p>
+  <div id="worldDots"></div>
+  <button class="btn" id="nextWorldBtn">NEXT WORLD ▶</button>
+</div>
+
+<div id="winScreen" class="overlay hidden">
+  <h1>🎉 YOU <span class="accent">WIN!</span></h1>
+  <p>Pip has conquered every biome on the planet. A true penguin legend!</p>
+  <p id="finalScore" style="color:#ffd34d;font-size:24px;font-weight:800"></p>
+  <button class="btn" id="playAgainBtn">PLAY AGAIN ↺</button>
+</div>
+
+<div id="levelSelect" class="overlay hidden">
+  <h1 id="lsHeader" style="font-size:clamp(28px,6vw,56px)">SELECT A <span class="accent">LEVEL</span></h1>
+  <div class="ls-wrap">
+    <div id="levelGrid" class="ls-grid"></div>
+    <div id="levelPreview">
+      <canvas id="previewCanvas" width="220" height="150"></canvas>
+      <div id="previewTitle">Hover a level…</div>
+      <div id="previewStats">Mouse over a level to preview it.</div>
+    </div>
+  </div>
+  <button class="btn" id="lsMenuBtn" style="margin-top:16px;font-size:17px;padding:11px 30px;background:linear-gradient(180deg,#bcd0ff,#7fa0e0);box-shadow:0 5px 0 #4a6aa8;color:#10254a">🏠 Main Menu</button>
+</div>
+
+<div id="bossRally" class="overlay hidden">
+  <h1 id="brHeader" style="font-size:clamp(28px,6vw,56px)">⚔️ BOSS <span class="accent">RALLY</span></h1>
+  <p class="tagline">Take on any world boss — or fight them all in a row!</p>
+  <div id="bossGrid" class="ls-grid"></div>
+  <button class="btn" id="brAllBtn" style="margin-top:8px;background:linear-gradient(180deg,#ff9a8a,#ff5a6a);color:#5a0010;box-shadow:0 6px 0 #a8202e">🔥 FIGHT ALL (Gauntlet)</button>
+  <button class="btn" id="brMenuBtn" style="margin-top:12px;font-size:17px;padding:11px 30px;background:linear-gradient(180deg,#bcd0ff,#7fa0e0);box-shadow:0 5px 0 #4a6aa8;color:#10254a">🏠 Main Menu</button>
+</div>
+
+<!-- Local copy first (works offline / file://). Falls back to CDN if missing. -->
+<script src="three.min.js"></script>
+<script>
+  if (typeof THREE === 'undefined') {
+    document.write('<scr' + 'ipt src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/scr' + 'ipt>');
+  }
+</script>
+<script>
+/* ============================================================
+   PIP THE PENGUIN — BIOME QUEST
+   A top-down 3D game built with Three.js.
+   ============================================================ */
+
+// ---------- Seeded RNG (deterministic level layouts) ----------
+function makeRNG(seed) {
+  let s = seed >>> 0;
+  return function () {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+// ---------- World / biome definitions ----------
+const WORLDS = [
+  {
+    name: 'Iceland',
+    sky: 0xbfe3ff, fog: 0xcfeaff, ground: 0xeaf6ff, groundAccent: 0xc9e6ff,
+    obstacleColor: 0xa8d4f0, decoColor: 0xffffff, hazard: 'crab',
+    levels: 5, baseFish: 5,
+    obstacleShape: 'ice', decoShape: 'snow', glow: 0x66ccff,
+    mtnRock: 0x9aa7bf, mtnCap: 0xffffff, caveRock: 0x9aa7bf, caveFloor: 0xb6c2d4,
+    houseWall: 0xeaf2ff, houseRoof: 0xcfe0f5, houseFloor: 0xd2e1f5, roofRound: true,
+  },
+  {
+    name: 'Desert',
+    sky: 0xffe2a8, fog: 0xffe9c4, ground: 0xf2cd8b, groundAccent: 0xe6b770,
+    obstacleColor: 0xc98f4a, decoColor: 0x4caf50, hazard: 'cactus',
+    levels: 5, baseFish: 6,
+    obstacleShape: 'dodeca', decoShape: 'mound', glow: 0xffd24d,
+    mtnRock: 0xc28a4e, mtnCap: 0xe8c690, caveRock: 0xb07a40, caveFloor: 0x8a5e30,
+    houseWall: 0xe0bd86, houseRoof: 0xb5824a, houseFloor: 0xc7a063,
+  },
+  {
+    name: 'Jungle',
+    sky: 0x8fd9a8, fog: 0xb8e8c8, ground: 0x4f8f4a, groundAccent: 0x3d7a3a,
+    obstacleColor: 0x6b4a2a, decoColor: 0x2e7d32, hazard: 'cactus',
+    levels: 5, baseFish: 7,
+    obstacleShape: 'tree', decoShape: 'frond', glow: 0x66ff88,
+    mtnRock: 0x6b6048, mtnCap: 0x3d5a2e, caveRock: 0x5e5340, caveFloor: 0x47402f,
+    houseWall: 0xb89b6a, houseRoof: 0x3d7a3a, houseFloor: 0x6b5a3a,
+  },
+  {
+    name: 'Volcano',
+    sky: 0x3a1a1a, fog: 0x5a2a22, ground: 0x40342f, groundAccent: 0x2c2420,
+    obstacleColor: 0x2a2220, decoColor: 0xff5722, hazard: 'lava',
+    levels: 5, baseFish: 8, dim: true,
+    obstacleShape: 'cone', decoShape: 'ember', glow: 0xff5a2a,
+    mtnRock: 0x2c2320, mtnCap: 0x7a2a14, caveRock: 0x2c2320, caveFloor: 0x1c1512,
+    houseWall: 0x3a302a, houseRoof: 0x1c1512, houseFloor: 0x241c18, window: true,
+  },
+  {
+    name: 'Swamp',
+    sky: 0x6f7d52, fog: 0x7c8a5e, ground: 0x434330, groundAccent: 0x353720,
+    obstacleColor: 0x4a5a35, decoColor: 0x6a8a3a, hazard: 'bog',
+    levels: 5, baseFish: 9,
+    obstacleShape: 'tree', decoShape: 'frond', glow: 0x8ad84a,
+    mtnRock: 0x4a5238, mtnCap: 0x3a4a28, caveRock: 0x3e4a30, caveFloor: 0x2e3422,
+    houseWall: 0x6a6048, houseRoof: 0x3d5a2e, houseFloor: 0x4a4230,
+  },
+  {
+    name: 'Crystal Caverns',
+    sky: 0x2a1a4a, fog: 0x3a2a5a, ground: 0x2e2440, groundAccent: 0x3e3258,
+    obstacleColor: 0x8a5ad0, decoColor: 0xc060ff, hazard: 'crystal',
+    levels: 5, baseFish: 10, dim: true,
+    obstacleShape: 'spire', decoShape: 'crystal', glow: 0xc060ff,
+    mtnRock: 0x4a3a6a, mtnCap: 0xb060ff, caveRock: 0x3a2c5a, caveFloor: 0x2a2044,
+    houseWall: 0x5a4a8a, houseRoof: 0x8a5ad0, houseFloor: 0x3a2c5a,
+  },
+  {
+    name: 'Storm Peaks',
+    sky: 0x8a9ab5, fog: 0x9aaac5, ground: 0x6a7585, groundAccent: 0x586575,
+    obstacleColor: 0x70808f, decoColor: 0xcfe0ff, hazard: 'storm',
+    levels: 5, baseFish: 11,
+    obstacleShape: 'rock', decoShape: 'snow', glow: 0xaad4ff,
+    mtnRock: 0x6a7585, mtnCap: 0xffffff, caveRock: 0x5a6575, caveFloor: 0x4a5565,
+    houseWall: 0xb8c4d4, houseRoof: 0x70808f, houseFloor: 0x8a96a6,
+  },
+  {
+    name: 'Shadow Realm',
+    sky: 0x140d22, fog: 0x20132f, ground: 0x1a1228, groundAccent: 0x241834,
+    obstacleColor: 0x2a1f3a, decoColor: 0x9a4aff, hazard: 'void',
+    levels: 5, baseFish: 12, dim: true,
+    obstacleShape: 'spire', decoShape: 'ember', glow: 0x9a4aff,
+    mtnRock: 0x1c1428, mtnCap: 0x6a2aaa, caveRock: 0x201630, caveFloor: 0x140d20,
+    houseWall: 0x2c2238, houseRoof: 0x140d20, houseFloor: 0x1c1426,
+  },
+  {
+    name: 'Clockwork Citadel',
+    sky: 0xb59a6a, fog: 0xc4a878, ground: 0x6a5a44, groundAccent: 0x564834,
+    obstacleColor: 0x8a7a55, decoColor: 0xd9a73a, hazard: 'saw',
+    levels: 5, baseFish: 13,
+    obstacleShape: 'rock', decoShape: 'mound', glow: 0xffc24d,
+    mtnRock: 0x5a4d38, mtnCap: 0x8a7a55, caveRock: 0x4a4030, caveFloor: 0x3a3225,
+    houseWall: 0x9a8a65, houseRoof: 0x6a5a44, houseFloor: 0x5a4c38,
+  },
+];
+
+// A calm grassy training ground used for the tutorial lessons.
+const TUTORIAL_WORLD = {
+  name: 'Training Grounds',
+  sky: 0xaee3ff, fog: 0xcdeeff, ground: 0x6fae5a, groundAccent: 0x5c9a48,
+  obstacleColor: 0x6b4a2a, decoColor: 0x2e7d32, hazard: 'cactus',
+  obstacleShape: 'tree', decoShape: 'frond', glow: 0x66ff88,
+  mtnRock: 0x7d9c5e, mtnCap: 0xa6c47a, caveRock: 0x8a9a6a, caveFloor: 0x6a7a4a,
+  houseWall: 0xcaa472, houseRoof: 0x8a5a2a, houseFloor: 0x6b4a2a,
+};
+
+const ARENA = 30; // half-size of the play field
+
+// Flat list of all real (non-tutorial) levels, for the level-select menu.
+const LEVELS = [];
+WORLDS.forEach((w, wi) => { for (let l = 0; l < w.levels; l++) LEVELS.push({ w: wi, l }); });
+function levelGlobalIndex(w, l) { return LEVELS.findIndex(e => e.w === w && e.l === l); }
+
+// ---------- Three.js core ----------
+const canvas = document.getElementById('game');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 400);
+
+let sunLight, ambLight, hemiLight;
+function setupLights() {
+  ambLight = new THREE.AmbientLight(0xffffff, 0.55);
+  scene.add(ambLight);
+  hemiLight = new THREE.HemisphereLight(0xffffff, 0x404040, 0.5);
+  scene.add(hemiLight);
+  sunLight = new THREE.DirectionalLight(0xffffff, 0.9);
+  sunLight.position.set(25, 50, 18);
+  sunLight.castShadow = true;
+  sunLight.shadow.mapSize.set(2048, 2048);
+  const d = 50;
+  sunLight.shadow.camera.left = -d; sunLight.shadow.camera.right = d;
+  sunLight.shadow.camera.top = d; sunLight.shadow.camera.bottom = -d;
+  sunLight.shadow.camera.near = 1; sunLight.shadow.camera.far = 140;
+  scene.add(sunLight);
+  scene.add(sunLight.target);
+}
+setupLights();
+
+// ============================================================
+//  PENGUIN MODEL
+// ============================================================
+function buildPenguin() {
+  const g = new THREE.Group();
+  // Swappable skin materials (recolored by applySkin)
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x222831, roughness: 0.6 });
+  const bellyMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
+  const trimMat = new THREE.MeshStandardMaterial({ color: 0xff9f29, roughness: 0.5 });
+  const eyeWhite = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
+  const eyeMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+
+  // Body (sphere scaled into a capsule shape — r128 has no CapsuleGeometry)
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.62, 18, 18), bodyMat);
+  body.scale.set(1, 1.45, 0.92);
+  body.position.y = 0.95; body.castShadow = true; g.add(body);
+
+  // Belly
+  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 16), bellyMat);
+  belly.scale.set(1, 1.25, 0.55); belly.position.set(0, 0.92, 0.34); g.add(belly);
+
+  // Head
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.5, 18, 18), bodyMat);
+  head.position.y = 1.78; head.castShadow = true; g.add(head);
+
+  // Eyes
+  const eyeGeo = new THREE.SphereGeometry(0.085, 10, 10);
+  const eyeWhiteGeo = new THREE.SphereGeometry(0.15, 10, 10);
+  for (const sx of [-1, 1]) {
+    const ew = new THREE.Mesh(eyeWhiteGeo, eyeWhite);
+    ew.position.set(sx * 0.18, 1.86, 0.4); g.add(ew);
+    const e = new THREE.Mesh(eyeGeo, eyeMat);
+    e.position.set(sx * 0.18, 1.86, 0.49); g.add(e);
+  }
+
+  // Beak
+  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.4, 8), trimMat);
+  beak.rotation.x = Math.PI / 2; beak.position.set(0, 1.7, 0.55); g.add(beak);
+
+  // Flippers (elongated spheres — capsule substitute for r128)
+  const flipperGeo = new THREE.SphereGeometry(0.12, 8, 12);
+  const lFlip = new THREE.Mesh(flipperGeo, bodyMat);
+  lFlip.scale.set(1, 3.4, 0.7);
+  lFlip.position.set(-0.66, 0.95, 0); lFlip.rotation.z = 0.35; lFlip.castShadow = true; g.add(lFlip);
+  const rFlip = new THREE.Mesh(flipperGeo, bodyMat);
+  rFlip.scale.set(1, 3.4, 0.7);
+  rFlip.position.set(0.66, 0.95, 0); rFlip.rotation.z = -0.35; rFlip.castShadow = true; g.add(rFlip);
+
+  // Feet
+  const footGeo = new THREE.BoxGeometry(0.28, 0.12, 0.42);
+  const lFoot = new THREE.Mesh(footGeo, trimMat);
+  lFoot.position.set(-0.26, 0.18, 0.18); g.add(lFoot);
+  const rFoot = new THREE.Mesh(footGeo, trimMat);
+  rFoot.position.set(0.26, 0.18, 0.18); g.add(rFoot);
+
+  // hat anchor (skins can add a hat on top of the head)
+  const hatAnchor = new THREE.Group();
+  hatAnchor.position.set(0, 2.12, 0.05); g.add(hatAnchor);
+
+  // carry stack — eggs Pip is balancing in front of him; grows as you collect
+  const carry = new THREE.Group();
+  carry.position.set(0, 0.42, 0.5);
+  g.add(carry);
+
+  // held weapon (attached near the right flipper)
+  const held = new THREE.Group();
+  held.position.set(0.7, 0.95, 0.15);
+  g.add(held);
+
+  g.userData = { body, head, lFlip, rFlip, lFoot, rFoot, carry, held, hatAnchor, mats: { bodyMat, bellyMat, trimMat } };
+  return g;
+}
+
+const penguin = buildPenguin();
+penguin.rotation.order = 'YXZ'; // yaw, then pitch (forward lean for slide), then roll (waddle)
+scene.add(penguin);
+
+// ============================================================
+//  SKINS (buyable in the shop) — body / belly / trim colors + optional hat
+// ============================================================
+const SKINS = [
+  { id: 'classic',  name: 'Classic',    price: 0,   body: 0x222831, belly: 0xffffff, trim: 0xff9f29 },
+  { id: 'blue',     name: 'Bluebeak',   price: 25,  body: 0x2a4d8f, belly: 0xcfe3ff, trim: 0xffcc33 },
+  { id: 'mint',     name: 'Minty',      price: 25,  body: 0x2f8f7a, belly: 0xeafff7, trim: 0xff7755 },
+  { id: 'rose',     name: 'Rosie',      price: 35,  body: 0xb04a6a, belly: 0xffe6ef, trim: 0xffd24d },
+  { id: 'purple',   name: 'Grape',      price: 35,  body: 0x5a3a8f, belly: 0xece0ff, trim: 0xffc24d },
+  { id: 'sunset',   name: 'Sunset',     price: 45,  body: 0xd2622a, belly: 0xffe9c4, trim: 0xffd24d },
+  { id: 'forest',   name: 'Forest',     price: 45,  body: 0x2e5a2a, belly: 0xe6ffe0, trim: 0xffb24d },
+  { id: 'charcoal', name: 'Shadow',     price: 50,  body: 0x33373d, belly: 0x9aa0aa, trim: 0xff6a3a },
+  { id: 'sky',      name: 'Sky',        price: 60,  body: 0x6fb6ff, belly: 0xffffff, trim: 0xff9f29 },
+  { id: 'bubble',   name: 'Bubblegum',  price: 70,  body: 0xff7ab0, belly: 0xffe0f0, trim: 0x66d0ff },
+  { id: 'lime',     name: 'Zest',       price: 70,  body: 0x7ac23a, belly: 0xf2ffe0, trim: 0xff5a3a },
+  { id: 'gold',     name: 'Gold ✨',    price: 180, body: 0xd4af37, belly: 0xfff3c4, trim: 0xffcf3a, metal: 0.75 },
+  { id: 'silver',   name: 'Silver',     price: 160, body: 0xc0c8d0, belly: 0xeef2f6, trim: 0x8aa0b0, metal: 0.75 },
+  { id: 'ghost',    name: 'Ghost 👻',   price: 140, body: 0xe8eefc, belly: 0xffffff, trim: 0xbcd0ff, glow: 0x8899ff },
+  { id: 'lava',     name: 'Lava 🔥',    price: 150, body: 0x3a1410, belly: 0xff7a2a, trim: 0xffd24d, glow: 0xff4400 },
+  { id: 'ice',      name: 'Ice ❄️',     price: 150, body: 0x9fe6ff, belly: 0xeaffff, trim: 0x66ccff, glow: 0x33b0ff },
+  { id: 'santa',    name: 'Santa 🎅',   price: 120, body: 0xc0202a, belly: 0xffffff, trim: 0xffd24d, hat: 'santa' },
+  { id: 'royal',    name: 'Royal 👑',   price: 250, body: 0x3a2a8f, belly: 0xf0e6ff, trim: 0xffcf3a, hat: 'crown' },
+  { id: 'dapper',   name: 'Dapper 🎩',  price: 180, body: 0x1a1a22, belly: 0xf5f5f5, trim: 0xffc24d, hat: 'top' },
+  { id: 'party',    name: 'Party 🎉',   price: 110, body: 0xff5aa0, belly: 0xfff0d0, trim: 0x66e0ff, hat: 'party' },
+];
+
+function buildHat(type) {
+  const g = new THREE.Group();
+  if (type === 'santa') {
+    const red = new THREE.MeshStandardMaterial({ color: 0xcc2222, roughness: 0.6 });
+    const white = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 });
+    const brim = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.1, 8, 18), white); brim.rotation.x = Math.PI / 2; brim.position.y = 0.05; g.add(brim);
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.6, 14), red); cone.position.y = 0.35; cone.rotation.z = 0.3; g.add(cone);
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 10), white); ball.position.set(0.18, 0.62, 0); g.add(ball);
+  } else if (type === 'top') {
+    const blk = new THREE.MeshStandardMaterial({ color: 0x15151c, roughness: 0.4, metalness: 0.2 });
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.06, 20), blk); g.add(brim);
+    const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.55, 20), blk); tube.position.y = 0.3; g.add(tube);
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.31, 0.12, 20), new THREE.MeshStandardMaterial({ color: 0xc0202a })); band.position.y = 0.12; g.add(band);
+  } else if (type === 'crown') {
+    const gold = new THREE.MeshStandardMaterial({ color: 0xffcf3a, metalness: 0.7, roughness: 0.3, emissive: 0x6a4a00, emissiveIntensity: 0.3 });
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.2, 16, 1, true), gold); band.position.y = 0.1; g.add(band);
+    for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; const sp = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.22, 5), gold); sp.position.set(Math.cos(a) * 0.32, 0.3, Math.sin(a) * 0.32); g.add(sp); }
+  } else if (type === 'party') {
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.7, 14), new THREE.MeshStandardMaterial({ color: 0x66e0ff, roughness: 0.5 })); cone.position.y = 0.35; g.add(cone);
+    for (let i = 0; i < 4; i++) { const d = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), new THREE.MeshStandardMaterial({ color: [0xff5aa0, 0xffd24d, 0x7ac23a, 0xffffff][i], emissive: 0x222200, emissiveIntensity: 0.2 })); d.position.set(Math.cos(i) * 0.18, 0.2 + i * 0.12, Math.sin(i) * 0.18); g.add(d); }
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), new THREE.MeshStandardMaterial({ color: 0xffd24d })); ball.position.y = 0.72; g.add(ball);
+  }
+  return g;
+}
+
+// Paint a skin onto any penguin model (global hero or a preview clone).
+function paintSkin(model, id) {
+  const s = SKINS.find(k => k.id === id) || SKINS[0];
+  const m = model.userData.mats;
+  m.bodyMat.color.setHex(s.body);
+  m.bellyMat.color.setHex(s.belly);
+  m.trimMat.color.setHex(s.trim);
+  m.bodyMat.metalness = s.metal || 0;
+  m.bodyMat.emissive.setHex(s.glow || 0x000000);
+  m.bodyMat.emissiveIntensity = s.glow ? 0.5 : 0;
+  const anchor = model.userData.hatAnchor;
+  while (anchor.children.length) anchor.remove(anchor.children[0]);
+  if (s.hat) anchor.add(buildHat(s.hat));
+}
+function applySkin(id) {
+  paintSkin(penguin, id);
+  state.equipped = id;
+}
+
+// Rebuild the visible stack of carried eggs to match `n`.
+// Collected eggs form a TRAIL that snakes along behind Pip (not a stack).
+const eggTrailGroup = new THREE.Group();
+scene.add(eggTrailGroup);
+const trailEggs = [];
+function setCarryStack(n) {
+  while (trailEggs.length < n) { const e = buildEgg(true); e.scale.setScalar(0.5); eggTrailGroup.add(e); trailEggs.push(e); }
+  while (trailEggs.length > n) { const e = trailEggs.pop(); eggTrailGroup.remove(e); }
+}
+
+// ---- Weapon models (small, held by the penguin) — "advanced" enchanted look ----
+function buildWeaponModel(type) {
+  const g = new THREE.Group();
+  if (type === 'sword') {
+    // runed greatsword: tapered glowing blade, jewelled crossguard, pommel
+    const steel = new THREE.MeshStandardMaterial({ color: 0xeef2ff, metalness: 0.85, roughness: 0.18, emissive: 0x3a6bd6, emissiveIntensity: 0.45 });
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.0, 0.04), steel);
+    blade.position.y = 0.55; g.add(blade);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.22, 4), steel);
+    tip.position.y = 1.12; tip.rotation.y = Math.PI / 4; g.add(tip);
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1.0, 0.05),
+      new THREE.MeshBasicMaterial({ color: 0x9fd0ff, transparent: true, opacity: 0.7 }));
+    edge.position.y = 0.55; g.add(edge);
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.09, 0.14), new THREE.MeshStandardMaterial({ color: 0xe0b23a, metalness: 0.6, roughness: 0.3 }));
+    g.add(guard);
+    const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.09, 0),
+      new THREE.MeshStandardMaterial({ color: 0x33b0ff, emissive: 0x33b0ff, emissiveIntensity: 1.2 }));
+    gem.position.set(0, 0, 0.1); g.add(gem);
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.3, 8), new THREE.MeshStandardMaterial({ color: 0x5a2a14 }));
+    grip.position.y = -0.2; g.add(grip);
+    const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), new THREE.MeshStandardMaterial({ color: 0xe0b23a, metalness: 0.6 }));
+    pommel.position.y = -0.36; g.add(pommel);
+  } else if (type === 'bow') {
+    // recurve bow: two curved limbs, riser, glowing string + nocked arrow
+    const wood = new THREE.MeshStandardMaterial({ color: 0x9a6a32, roughness: 0.55, metalness: 0.1 });
+    for (const s of [1, -1]) {
+      const limb = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.045, 8, 14, Math.PI * 0.6), wood);
+      limb.rotation.z = s * Math.PI * 0.5; limb.position.y = s * 0.0; g.add(limb);
+    }
+    const riser = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.1), wood); g.add(riser);
+    const grimGem = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), new THREE.MeshStandardMaterial({ color: 0xffcf6a, emissive: 0xff9a2a, emissiveIntensity: 0.9 }));
+    g.add(grimGem);
+    const str = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.95, 0.015), new THREE.MeshBasicMaterial({ color: 0xddeeff, transparent: true, opacity: 0.85 }));
+    str.position.x = 0.34; g.add(str);
+    const arrow = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.7, 6), new THREE.MeshStandardMaterial({ color: 0x6a3a1a }));
+    arrow.rotation.z = Math.PI / 2; arrow.position.set(0.1, 0, 0); g.add(arrow);
+  } else if (type === 'icicle') { // gnarled rod, crystal cluster, orbiting rune ring
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.07, 1.05, 8), new THREE.MeshStandardMaterial({ color: 0x4a3a5a, roughness: 0.7 }));
+    g.add(rod);
+    const iceMat = new THREE.MeshStandardMaterial({ color: 0x9fe6ff, emissive: 0x33b0ff, emissiveIntensity: 1.1, transparent: true, opacity: 0.9 });
+    const main = new THREE.Mesh(new THREE.OctahedronGeometry(0.2, 0), iceMat); main.position.y = 0.66; g.add(main);
+    for (const [ox, oy, oz] of [[0.14, 0.5, 0], [-0.12, 0.56, 0.06], [0.04, 0.78, -0.05]]) {
+      const shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.1, 0), iceMat);
+      shard.position.set(ox, oy, oz); g.add(shard);
+    }
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.02, 6, 20),
+      new THREE.MeshBasicMaterial({ color: 0x66ccff, transparent: true, opacity: 0.6 }));
+    ring.position.y = 0.62; ring.rotation.x = Math.PI / 2; g.add(ring);
+  } else if (type === 'shield') {
+    // round shield: face plate + rim + center boss
+    const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.12, 20),
+      new THREE.MeshStandardMaterial({ color: 0xc9962a, metalness: 0.5, roughness: 0.4 }));
+    plate.rotation.x = Math.PI / 2; g.add(plate);                  // faces +z
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.08, 10, 28),
+      new THREE.MeshStandardMaterial({ color: 0xe8d27a, metalness: 0.6, roughness: 0.3 }));
+    g.add(rim);
+    const boss = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12),
+      new THREE.MeshStandardMaterial({ color: 0xfff0b0, emissive: 0xffcf3a, emissiveIntensity: 0.5, metalness: 0.6 }));
+    boss.position.z = 0.1; g.add(boss);
+    // emblem cross
+    for (const rot of [0, Math.PI / 2]) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.07, 0.02), new THREE.MeshStandardMaterial({ color: 0x9a6a14 }));
+      bar.position.z = 0.07; bar.rotation.z = rot; g.add(bar);
+    }
+  } else if (type === 'hammer') {
+    // warhammer: long haft + chunky steel head with glowing runes
+    const wood = new THREE.MeshStandardMaterial({ color: 0x6a4326, roughness: 0.7 });
+    const steel = new THREE.MeshStandardMaterial({ color: 0xc9cdd6, metalness: 0.85, roughness: 0.3 });
+    const haft = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 1.1, 8), wood); haft.position.y = 0.1; g.add(haft);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.36, 0.36), steel); head.position.y = 0.72; g.add(head);
+    for (const sx of [-1, 1]) { const face = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.4), new THREE.MeshStandardMaterial({ color: 0xe8ecf4, metalness: 0.9, roughness: 0.2 })); face.position.set(sx * 0.25, 0.72, 0); g.add(face); }
+    const rune = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.1, 0.1), new THREE.MeshStandardMaterial({ color: 0xffc24d, emissive: 0xff9a2a, emissiveIntensity: 1.2 })); rune.position.y = 0.72; g.add(rune);
+    const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), steel); pommel.position.y = -0.46; g.add(pommel);
+  } else if (type === 'flame') {
+    // flame staff: charred rod topped with a burning orb in a forked cradle
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.07, 1.05, 8), new THREE.MeshStandardMaterial({ color: 0x3a2218, roughness: 0.75 })); g.add(rod);
+    for (const sx of [-1, 1]) { const prong = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.5, 5), new THREE.MeshStandardMaterial({ color: 0x2a1810, roughness: 0.8 })); prong.position.set(sx * 0.14, 0.7, 0); prong.rotation.z = sx * 0.45; g.add(prong); }
+    const flameMat = new THREE.MeshStandardMaterial({ color: 0xffb24a, emissive: 0xff5a1a, emissiveIntensity: 1.4, transparent: true, opacity: 0.95 });
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 12), flameMat); orb.position.y = 0.74; g.add(orb);
+    const tongue = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.4, 8), flameMat); tongue.position.y = 1.0; g.add(tongue);
+  }
+  return g;
+}
+
+// ---- Floating power-up pickup ----
+function buildPowerup(type) {
+  const g = new THREE.Group();
+  const inner = new THREE.Group();
+  const icon = buildWeaponModel(type);
+  icon.position.y = 0; inner.add(icon);
+  g.add(inner);
+  const tint = type === 'sword' ? 0xdfe6ff : type === 'bow' ? 0xffcf6a
+    : type === 'hammer' ? 0xffd98a : type === 'flame' ? 0xff8a3a
+    : type === 'shield' ? 0xffe6a0 : 0x9fe6ff;
+  // glow beam + ground halo so it stands out, like the eggs
+  const beamMat = new THREE.MeshBasicMaterial({ color: tint, transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide });
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.36, 2.6, 14, 1, true), beamMat);
+  beam.position.y = -0.1; g.add(beam);
+  const haloMat = new THREE.MeshBasicMaterial({ color: tint, transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide });
+  const halo = new THREE.Mesh(new THREE.CircleGeometry(0.65, 24), haloMat);
+  halo.rotation.x = -Math.PI / 2; halo.position.y = -1.28; g.add(halo);
+  g.userData.inner = inner;
+  return g;
+}
+
+// ---- Projectile (arrow / icicle) ----
+function buildProjectile(type) {
+  const g = new THREE.Group();
+  if (type === 'arrow') {
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.9, 8), new THREE.MeshStandardMaterial({ color: 0x6a3a1a }));
+    shaft.rotation.x = Math.PI / 2; g.add(shaft);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.4, 8), new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.6 }));
+    tip.rotation.x = Math.PI / 2; tip.position.z = 0.55; g.add(tip);
+    const fletch = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.3, 4), new THREE.MeshStandardMaterial({ color: 0xcc4422 }));
+    fletch.rotation.x = -Math.PI / 2; fletch.position.z = -0.45; g.add(fletch);
+  } else if (type === 'flame') { // fireball: glowing core + soft halo
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 12),
+      new THREE.MeshStandardMaterial({ color: 0xffb24a, emissive: 0xff5a1a, emissiveIntensity: 1.5 }));
+    g.add(core);
+    const halo = new THREE.Mesh(new THREE.SphereGeometry(0.42, 10, 10),
+      new THREE.MeshBasicMaterial({ color: 0xff7a2a, transparent: true, opacity: 0.35, depthWrite: false }));
+    g.add(halo);
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.6, 8),
+      new THREE.MeshBasicMaterial({ color: 0xffcf6a, transparent: true, opacity: 0.6, depthWrite: false }));
+    tail.rotation.x = -Math.PI / 2; tail.position.z = -0.45; g.add(tail);
+  } else { // icicle
+    const ice = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.9, 8),
+      new THREE.MeshStandardMaterial({ color: 0x4a90ff, emissive: 0x1450ff, emissiveIntensity: 1.3, transparent: true, opacity: 0.92 }));
+    ice.rotation.x = Math.PI / 2; ice.position.z = 0.2; g.add(ice);
+  }
+  return g;
+}
+
+// Arm a weapon (or null to disarm); updates the held model + HUD.
+function armWeapon(type) {
+  state.weapon = type;
+  state.ammo = type ? WEAPONS[type].ammo : 0;
+  state.blocking = false; state.parryTimer = 0;
+  const held = penguin.userData.held;
+  while (held.children.length) held.remove(held.children[0]);
+  if (type) {
+    const m = buildWeaponModel(type);
+    m.scale.setScalar(0.85);
+    held.add(m);
+  }
+  updateHUD();
+}
+
+// ============================================================
+//  COLLECTIBLE EGG
+// ============================================================
+function buildEgg(mini) {
+  const g = new THREE.Group();
+  // inner = the part that bobs/spins (egg + speckles); marker stays still
+  const inner = new THREE.Group();
+  g.add(inner);
+
+  const shell = new THREE.MeshStandardMaterial({ color: 0x2a2320, roughness: 0.4, metalness: 0.1, emissive: 0x3a2c20, emissiveIntensity: 0.3 });
+  const egg = new THREE.Mesh(new THREE.SphereGeometry(0.34, 16, 16), shell);
+  egg.scale.set(1, 1.32, 1); egg.castShadow = true; inner.add(egg);
+  // lighter speckles so they show on the dark shell
+  const spotMat = new THREE.MeshStandardMaterial({ color: 0xcdb0a8, roughness: 0.7 });
+  const spotPos = [[0.18, 0.1, 0.22], [-0.2, -0.05, 0.18], [0.05, 0.28, 0.2], [-0.1, 0.18, -0.22]];
+  for (const [x, y, z] of spotPos) {
+    const s = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), spotMat);
+    s.position.set(x, y, z); inner.add(s);
+  }
+
+  if (!mini) {
+    // --- visibility marker so eggs pop on snow / any biome ---
+    // soft golden light beam rising from the ground through the egg
+    const beamMat = new THREE.MeshBasicMaterial({ color: 0xffd24d, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide });
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 2.4, 14, 1, true), beamMat);
+    beam.position.y = 0.0; g.add(beam); // egg group sits at y=1.2 → beam spans ~0..2.4
+    // glowing halo disc on the ground
+    const haloMat = new THREE.MeshBasicMaterial({ color: 0xffd24d, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide });
+    const halo = new THREE.Mesh(new THREE.CircleGeometry(0.6, 24), haloMat);
+    halo.rotation.x = -Math.PI / 2; halo.position.y = -1.18; g.add(halo);
+    // dark ring outline around the halo for extra contrast on bright ground
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0xb8860b, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide });
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.58, 0.72, 24), ringMat);
+    ring.rotation.x = -Math.PI / 2; ring.position.y = -1.17; g.add(ring);
+    g.userData.halo = halo;
+  }
+
+  g.userData.inner = inner;
+  g.scale.setScalar(mini ? 1 : 1.05);
+  return g;
+}
+
+// ============================================================
+//  OBSTACLES & DECORATIONS per biome
+// ============================================================
+function buildObstacle(world) {
+  const c = world.obstacleColor;
+  const mat = new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 });
+  const shape = world.obstacleShape || 'cone';
+  let mesh;
+  if (shape === 'ice') {
+    mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(1.1, 0), new THREE.MeshStandardMaterial({ color: c, roughness: 0.3, metalness: 0.1, transparent: true, opacity: 0.92 }));
+    mesh.scale.set(1, 1.4, 1);
+  } else if (shape === 'dodeca' || shape === 'rock') {
+    mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(1.0, 0), new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, flatShading: true }));
+    mesh.scale.set(1, shape === 'rock' ? 0.95 : 0.7, 1);
+  } else if (shape === 'tree') {
+    // tree trunk + canopy
+    const grp = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 2.4, 8), mat);
+    trunk.position.y = 1.2; trunk.castShadow = true; grp.add(trunk);
+    const leaf = new THREE.Mesh(new THREE.SphereGeometry(1.4, 10, 10), new THREE.MeshStandardMaterial({ color: world.decoColor, roughness: 0.8 }));
+    leaf.position.y = 3; leaf.castShadow = true; grp.add(leaf);
+    grp.userData.radius = 0.7;
+    return grp;
+  } else if (shape === 'spire') {
+    // jagged crystal spire: a tall faceted shard that glints
+    const crystalMat = new THREE.MeshStandardMaterial({ color: c, roughness: 0.2, metalness: 0.2, emissive: c, emissiveIntensity: 0.35, transparent: true, opacity: 0.92, flatShading: true });
+    mesh = new THREE.Mesh(new THREE.OctahedronGeometry(1.0, 0), crystalMat);
+    mesh.scale.set(0.7, 1.9, 0.7);
+    mesh.position.y = 1.5; mesh.castShadow = true; mesh.receiveShadow = true;
+    const grp = new THREE.Group(); grp.add(mesh);
+    grp.userData.radius = 0.85;
+    return grp;
+  } else {
+    mesh = new THREE.Mesh(new THREE.ConeGeometry(1.1, 2.4, 6), mat);
+  }
+  mesh.position.y = 1.1; mesh.castShadow = true; mesh.receiveShadow = true;
+  const grp = new THREE.Group(); grp.add(mesh);
+  grp.userData.radius = 1.1;
+  return grp;
+}
+
+// Hazards: cactus / crab / lava — touching costs a fish
+function buildHazard(world) {
+  const grp = new THREE.Group();
+  if (world.hazard === 'cactus') {
+    const m = new THREE.MeshStandardMaterial({ color: 0x2e8b3a, roughness: 0.7 });
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.36, 2, 10), m);
+    stem.position.y = 1; stem.castShadow = true; grp.add(stem);
+    for (const sx of [-1, 1]) {
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.9, 8), m);
+      arm.position.set(sx * 0.45, 1.2, 0); arm.castShadow = true; grp.add(arm);
+      const armUp = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.7, 8), m);
+      armUp.position.set(sx * 0.62, 1.55, 0); armUp.castShadow = true; grp.add(armUp);
+    }
+    grp.userData.radius = 0.7;
+  } else if (world.hazard === 'crab') {
+    const m = new THREE.MeshStandardMaterial({ color: 0xe8503a, roughness: 0.5 });
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 12), m);
+    body.scale.set(1.3, 0.7, 1); body.position.y = 0.5; body.castShadow = true; grp.add(body);
+    for (const sx of [-1, 1]) {
+      const claw = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 8), m);
+      claw.position.set(sx * 0.85, 0.5, 0.3); grp.add(claw);
+    }
+    const eg = new THREE.SphereGeometry(0.08, 8, 8);
+    const em = new THREE.MeshStandardMaterial({ color: 0x111 });
+    for (const sx of [-1, 1]) { const e = new THREE.Mesh(eg, em); e.position.set(sx * 0.2, 0.9, 0.45); grp.add(e); }
+    grp.userData.radius = 0.9; grp.userData.moving = true;
+  } else if (world.hazard === 'bog') {        // bubbling toxic swamp pool
+    const m = new THREE.MeshStandardMaterial({ color: 0x5a7a2a, emissive: 0x2a4a10, emissiveIntensity: 0.5, roughness: 0.5 });
+    const pool = new THREE.Mesh(new THREE.CircleGeometry(1.35, 20), m);
+    pool.rotation.x = -Math.PI / 2; pool.position.y = 0.06; grp.add(pool);
+    for (let i = 0; i < 4; i++) {              // bubbles
+      const b = new THREE.Mesh(new THREE.SphereGeometry(0.12 + Math.random() * 0.08, 8, 8), new THREE.MeshStandardMaterial({ color: 0x7a9a3a, emissive: 0x3a5a14, emissiveIntensity: 0.6 }));
+      const a = (i / 4) * Math.PI * 2; b.position.set(Math.cos(a) * 0.6, 0.18, Math.sin(a) * 0.6); grp.add(b);
+    }
+    grp.userData.radius = 1.2; grp.userData.glow = m;
+  } else if (world.hazard === 'crystal') {     // cluster of sharp magenta crystal blades
+    const m = new THREE.MeshStandardMaterial({ color: 0xc060ff, emissive: 0x8a2adf, emissiveIntensity: 0.9, roughness: 0.2, metalness: 0.2, flatShading: true });
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      const sh = new THREE.Mesh(new THREE.ConeGeometry(0.22, 1.1 + (i % 2) * 0.5, 5), m);
+      sh.position.set(Math.cos(a) * 0.4, 0.55, Math.sin(a) * 0.4); sh.rotation.x = Math.cos(a) * 0.3; sh.rotation.z = -Math.sin(a) * 0.3; sh.castShadow = true; grp.add(sh);
+    }
+    grp.userData.radius = 0.9; grp.userData.glow = m;
+  } else if (world.hazard === 'storm') {       // crackling electric pad
+    const m = new THREE.MeshStandardMaterial({ color: 0x66aaff, emissive: 0x3a7aff, emissiveIntensity: 1.1, roughness: 0.3 });
+    const pad = new THREE.Mesh(new THREE.CircleGeometry(1.25, 16), m);
+    pad.rotation.x = -Math.PI / 2; pad.position.y = 0.05; grp.add(pad);
+    for (let i = 0; i < 3; i++) {              // jagged arcs
+      const bolt = new THREE.Mesh(new THREE.ConeGeometry(0.1, 1.4, 4), new THREE.MeshStandardMaterial({ color: 0xddeeff, emissive: 0x99ccff, emissiveIntensity: 1.4 }));
+      bolt.position.set((i - 1) * 0.4, 0.7, 0); bolt.rotation.z = (i - 1) * 0.3; grp.add(bolt);
+    }
+    grp.userData.radius = 1.1; grp.userData.glow = m;
+  } else if (world.hazard === 'void') {        // shadow rift — a dark pool ringed with violet fire
+    const m = new THREE.MeshStandardMaterial({ color: 0x120820, emissive: 0x4a1a8a, emissiveIntensity: 0.8, roughness: 0.6 });
+    const pool = new THREE.Mesh(new THREE.CircleGeometry(1.4, 22), m);
+    pool.rotation.x = -Math.PI / 2; pool.position.y = 0.06; grp.add(pool);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.35, 0.12, 8, 28), new THREE.MeshStandardMaterial({ color: 0x9a4aff, emissive: 0x7a2aff, emissiveIntensity: 1.2 }));
+    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.1; grp.add(ring);
+    grp.userData.radius = 1.25; grp.userData.glow = m;
+  } else if (world.hazard === 'saw') {         // spinning brass sawblade that roams
+    const m = new THREE.MeshStandardMaterial({ color: 0xb8b0a0, metalness: 0.8, roughness: 0.3 });
+    const blade = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.12, 16), m);
+    blade.rotation.x = Math.PI / 2; blade.position.y = 0.5; grp.add(blade);
+    for (let i = 0; i < 10; i++) {             // teeth
+      const a = (i / 10) * Math.PI * 2;
+      const t = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.4, 4), m);
+      t.position.set(Math.cos(a) * 1.0, 0.5, Math.sin(a) * 1.0); t.rotation.z = -a; t.rotation.x = Math.PI / 2; grp.add(t);
+    }
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.2, 8), new THREE.MeshStandardMaterial({ color: 0x6a5a3a, metalness: 0.7 }));
+    hub.rotation.x = Math.PI / 2; hub.position.y = 0.5; grp.add(hub);
+    grp.userData.radius = 1.0; grp.userData.moving = true; grp.userData.spin = blade;
+  } else { // lava pool
+    const m = new THREE.MeshStandardMaterial({ color: 0xff5722, emissive: 0xff3300, emissiveIntensity: 0.9, roughness: 0.4 });
+    const pool = new THREE.Mesh(new THREE.CircleGeometry(1.3, 20), m);
+    pool.rotation.x = -Math.PI / 2; pool.position.y = 0.06; grp.add(pool);
+    grp.userData.radius = 1.2; grp.userData.glow = m;
+  }
+  return grp;
+}
+
+// Mountain for the natural border ring
+function buildMountain(world, rng) {
+  const grp = new THREE.Group();
+  const rockColor = world.mtnRock || 0x8a8a8a;
+  const capColor = world.mtnCap || null;
+
+  const h = 6 + rng() * 8;
+  const r = 2.6 + rng() * 2.8;
+  const seg = 5 + Math.floor(rng() * 3);
+  const rockMat = new THREE.MeshStandardMaterial({ color: rockColor, roughness: 0.96, flatShading: true });
+  const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, seg), rockMat);
+  m.position.y = h / 2 - 0.6; m.rotation.y = rng() * Math.PI * 2;
+  m.castShadow = true; m.receiveShadow = true; grp.add(m);
+
+  if (capColor) {
+    const capH = h * 0.34, capR = r * 0.34;
+    const capMat = new THREE.MeshStandardMaterial({ color: capColor, roughness: 0.55, flatShading: true });
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(capR, capH, seg), capMat);
+    cap.position.y = (h - 0.6) - capH / 2; cap.rotation.y = m.rotation.y;
+    cap.castShadow = true; grp.add(cap);
+  }
+  return grp;
+}
+
+// Building doorway: visual gap width + collision half-angle that lets you pass.
+const BUILDING_SCALE = 1.5;   // make all buildings bigger
+const DOOR_GAP = 1.2;     // radians of wall left open (centred on local +z)
+const DOOR_HALF = 0.62;   // collision: angle from door centre that is walk-through
+
+// A circular wall (open cylinder shell) with a doorway gap centred on local +z.
+function wallRing(radius, height, color, gapAngle) {
+  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.92, flatShading: true, side: THREE.DoubleSide });
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height, 32, 1, true, gapAngle / 2, Math.PI * 2 - gapAngle), mat);
+  m.position.y = height / 2; m.castShadow = true; m.receiveShadow = true;
+  return m;
+}
+function floorDisc(radius, color) {
+  const m = new THREE.Mesh(new THREE.CircleGeometry(radius, 28), new THREE.MeshStandardMaterial({ color, roughness: 0.95 }));
+  m.rotation.x = -Math.PI / 2; m.position.y = 0.03; m.receiveShadow = true; return m;
+}
+
+// ---- Cave: hollow rock dome with a mouth; eggs are stashed INSIDE ----
+function buildCave(world) {
+  const grp = new THREE.Group();
+  const rock = world.caveRock || 0x8a8a8a, floor = world.caveFloor || 0x6a6a6a;
+  grp.add(floorDisc(2.3, floor));
+  // dome = the hideable "roof" (lifts away when you go inside)
+  const domeMat = new THREE.MeshStandardMaterial({ color: rock, roughness: 0.97, flatShading: true });
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(2.5, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), domeMat);
+  dome.scale.y = 1.15; dome.castShadow = true; dome.receiveShadow = true; grp.add(dome);
+  // dark mouth on +z so the entrance reads before you enter
+  const darkMat = new THREE.MeshStandardMaterial({ color: 0x07090d, roughness: 1 });
+  const mouth = new THREE.Mesh(new THREE.SphereGeometry(1.2, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), darkMat);
+  mouth.scale.set(1, 1.05, 1); mouth.position.set(0, 0, 1.85); grp.add(mouth);
+  grp.userData = { rWall: 2.3, doorHalf: DOOR_HALF, roof: dome };
+  grp.scale.setScalar(BUILDING_SCALE); grp.userData.rWall *= BUILDING_SCALE;
+  return grp;
+}
+
+// ---- House: hollow walls + hideable roof; eggs INSIDE ----
+function buildHouse(world) {
+  const grp = new THREE.Group();
+  const wall = world.houseWall || 0xcaa472, roofCol = world.houseRoof || 0x8a5a2a, floor = world.houseFloor || 0x6b4a2a;
+  const round = !!world.roofRound;
+  grp.add(floorDisc(1.9, floor));
+  grp.add(wallRing(1.95, 1.9, wall, DOOR_GAP));
+  // roof — cone for huts, smooth dome-cone for igloos; lifts away when you enter
+  const roof = new THREE.Mesh(
+    new THREE.ConeGeometry(2.45, 1.6, round ? 22 : 4),
+    new THREE.MeshStandardMaterial({ color: roofCol, roughness: 0.85, flatShading: !round }));
+  roof.position.y = 2.65; if (!round) roof.rotation.y = Math.PI / 4;
+  roof.castShadow = true; grp.add(roof);
+  if (world.window) {
+    const win = new THREE.MeshStandardMaterial({ color: 0xff7a2a, emissive: 0xff5500, emissiveIntensity: 1 });
+    const w = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.1), win); w.position.set(0, 1.2, -1.92); grp.add(w);
+  }
+  grp.userData = { rWall: 1.95, doorHalf: DOOR_HALF, roof };
+  grp.scale.setScalar(BUILDING_SCALE); grp.userData.rWall *= BUILDING_SCALE;
+  return grp;
+}
+
+// ---- Enemy base: hollow fort, guarded interior, hideable spiked crown ----
+function buildEnemyBase(world) {
+  const grp = new THREE.Group();
+  grp.add(floorDisc(2.2, 0x1a1218));
+  grp.add(wallRing(2.2, 2.6, 0x2a1e26, DOOR_GAP));
+  const spikeMat = new THREE.MeshStandardMaterial({ color: 0x1a1018, roughness: 0.9, flatShading: true });
+  // crown of spikes = the hideable "roof"
+  const crown = new THREE.Group();
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2;
+    const sp = new THREE.Mesh(new THREE.ConeGeometry(0.42, 1.2, 5), spikeMat);
+    sp.position.set(Math.cos(a) * 2.0, 2.9, Math.sin(a) * 2.0); sp.castShadow = true; crown.add(sp);
+  }
+  grp.add(crown);
+  // glowing core on a pedestal — the interior centrepiece
+  const core = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 12), new THREE.MeshStandardMaterial({ color: 0xff2a2a, emissive: 0xff0000, emissiveIntensity: 1.1 }));
+  core.position.y = 1.35; grp.add(core);
+  const ped = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.6, 0.95, 8), spikeMat);
+  ped.position.y = 0.47; grp.add(ped);
+  grp.userData = { rWall: 2.2, doorHalf: DOOR_HALF, roof: crown, core };
+  grp.scale.setScalar(BUILDING_SCALE); grp.userData.rWall *= BUILDING_SCALE;
+  return grp;
+}
+
+// ---- Enemy archetypes (more variety + danger deeper in the game) ----
+const ENEMY_KINDS = {
+  grunt:   { hpMul: 1.0, speed: 2.6, size: 1.0,  color: 0x6a2a4a, behavior: 'chase' },
+  charger: { hpMul: 1.0, speed: 3.0, size: 0.95, color: 0xc24a14, behavior: 'charge' },                 // dashes in bursts
+  brute:   { hpMul: 2.2, speed: 1.7, size: 1.55, color: 0x4a2330, behavior: 'chase', knockResist: 0.5 }, // tanky, shrugs off knockback
+  caster:  { hpMul: 1.0, speed: 1.9, size: 1.1,  color: 0x3a3a7a, behavior: 'caster' },                 // hovers & shoots fireballs
+  bomber:  { hpMul: 0.8, speed: 3.4, size: 0.9,  color: 0xc0331a, behavior: 'charge' },                 // rushes in & EXPLODES on death
+  sprite:  { hpMul: 0.55, speed: 4.7, size: 0.7, color: 0xb060ff, behavior: 'chase' },                  // tiny, very fast flyer
+  spitter: { hpMul: 1.0, speed: 1.6, size: 1.05, color: 0x4a7a3a, behavior: 'caster' },                 // ranged poison spitter
+  golem:   { hpMul: 3.0, speed: 1.3, size: 1.7,  color: 0x6a6072, behavior: 'chase', knockResist: 0.8 }, // huge, near-immovable tank
+};
+// which kinds appear in each world (index 0..8)
+const WORLD_KINDS = [
+  ['grunt'],
+  ['grunt', 'charger'],
+  ['charger', 'brute'],
+  ['brute', 'caster', 'charger'],
+  ['charger', 'spitter', 'bomber'],     // Swamp
+  ['sprite', 'caster', 'brute'],        // Crystal Caverns
+  ['sprite', 'charger', 'caster'],      // Storm Peaks
+  ['bomber', 'sprite', 'golem'],        // Shadow Realm
+  ['golem', 'charger', 'spitter'],      // Clockwork Citadel
+];
+
+function buildEnemy(world, tier, kind) {
+  kind = kind || 'grunt';
+  const K = ENEMY_KINDS[kind] || ENEMY_KINDS.grunt;
+  const g = new THREE.Group();
+  const bodyMat = new THREE.MeshStandardMaterial({ color: K.color, roughness: 0.6, emissive: K.color, emissiveIntensity: 0.25 });
+  const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffe000, emissive: 0xffcc00, emissiveIntensity: 1.2 + tier * 0.3 });
+  const darkMat = new THREE.MeshStandardMaterial({ color: 0x2a1018, roughness: 0.8 });
+
+  if (kind === 'brute') {
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.62, 14, 14), bodyMat);
+    body.scale.set(1.15, 1.0, 1.05); body.position.y = 0.66; body.castShadow = true; g.add(body);
+    for (const ax of [-0.46, 0.46]) { const pl = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.55, 0.55), darkMat); pl.position.set(ax, 0.7, 0); pl.castShadow = true; g.add(pl); }
+    const helm = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.26, 0.74), darkMat); helm.position.y = 1.06; g.add(helm);
+    for (const sx of [-1, 1]) { const h = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.62, 6), darkMat); h.position.set(sx * 0.34, 1.34, 0); h.rotation.z = sx * -0.25; g.add(h); }
+    for (const sx of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 8), eyeMat); e.position.set(sx * 0.22, 0.78, 0.52); g.add(e); }
+  } else if (kind === 'charger') {
+    const body = new THREE.Mesh(new THREE.ConeGeometry(0.44, 1.05, 8), bodyMat);
+    body.rotation.x = Math.PI / 2; body.position.set(0, 0.5, 0); body.castShadow = true; g.add(body);  // points forward (+z)
+    const fin = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.55, 4), darkMat); fin.position.set(0, 0.88, -0.1); g.add(fin);
+    for (const sx of [-1, 1]) { const h = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.5, 6), darkMat); h.position.set(sx * 0.2, 0.62, 0.2); h.rotation.x = -0.6; g.add(h); }
+    for (const sx of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), eyeMat); e.position.set(sx * 0.16, 0.56, 0.52); g.add(e); }
+  } else if (kind === 'caster' || kind === 'spitter') {
+    const body = new THREE.Mesh(new THREE.ConeGeometry(0.52, 1.15, 10), bodyMat);
+    body.position.y = 0.7; body.castShadow = true; g.add(body);                                          // robe
+    const orbCol = kind === 'spitter' ? 0x9ad84a : 0xff8a3a, orbEm = kind === 'spitter' ? 0x5a9a1a : 0xff5a1a;
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 12), new THREE.MeshStandardMaterial({ color: orbCol, emissive: orbEm, emissiveIntensity: 1.1 }));
+    orb.position.y = 1.45; g.add(orb);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 10), eyeMat); eye.position.set(0, 0.88, 0.44); g.add(eye);
+  } else if (kind === 'bomber') {
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.56, 14, 14), bodyMat);
+    body.position.y = 0.6; body.castShadow = true; g.add(body);
+    const fuse = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.3, 6), darkMat); fuse.position.y = 1.2; g.add(fuse);
+    const spark = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), new THREE.MeshStandardMaterial({ color: 0xffd040, emissive: 0xff8800, emissiveIntensity: 1.6 })); spark.position.y = 1.4; g.add(spark);
+    for (const sx of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), eyeMat); e.position.set(sx * 0.2, 0.66, 0.46); g.add(e); }
+  } else if (kind === 'sprite') {
+    const body = new THREE.Mesh(new THREE.OctahedronGeometry(0.4, 0), bodyMat);
+    body.position.y = 0.85; body.castShadow = true; g.add(body);
+    for (const sx of [-1, 1]) { const w = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.5, 4), new THREE.MeshStandardMaterial({ color: K.color, emissive: K.color, emissiveIntensity: 0.8, transparent: true, opacity: 0.7 })); w.position.set(sx * 0.42, 0.95, -0.05); w.rotation.z = sx * 1.2; g.add(w); }
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), eyeMat); e.position.set(0, 0.9, 0.36); g.add(e);
+  } else if (kind === 'golem') {
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.0, 0.85), bodyMat);
+    body.position.y = 0.8; body.castShadow = true; g.add(body);
+    for (const sx of [-1, 1]) { const arm = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.7, 0.3), bodyMat); arm.position.set(sx * 0.72, 0.8, 0); arm.castShadow = true; g.add(arm); }
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.4, 0.5), darkMat); head.position.y = 1.45; g.add(head);
+    for (const sx of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), eyeMat); e.position.set(sx * 0.15, 1.48, 0.27); g.add(e); }
+  } else { // grunt
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 14, 14), bodyMat);
+    body.scale.set(1, 0.9, 1); body.position.y = 0.55; body.castShadow = true; g.add(body);
+    for (const sx of [-1, 1]) { const h = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.4 + tier * 0.1, 6), darkMat); h.position.set(sx * 0.25, 1.0, 0); h.rotation.z = sx * -0.3; g.add(h); }
+    for (const sx of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), eyeMat); e.position.set(sx * 0.2, 0.62, 0.42); g.add(e); }
+    for (const sx of [-1, 1]) { const f = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.14, 0.28), darkMat); f.position.set(sx * 0.22, 0.1, 0.05); g.add(f); }
+  }
+  g.userData.body = g.children[0];          // first child is the body mesh (for the freeze tint)
+  g.scale.setScalar(K.size * (1 + tier * 0.07));
+  return g;
+}
+
+// Caster fireball projectile
+function buildEnemyShot() {
+  const g = new THREE.Group();
+  const core = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 10),
+    new THREE.MeshStandardMaterial({ color: 0xff8a3a, emissive: 0xff5a1a, emissiveIntensity: 1.3 }));
+  g.add(core);
+  const glow = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 10),
+    new THREE.MeshBasicMaterial({ color: 0xff7a2a, transparent: true, opacity: 0.35, depthWrite: false }));
+  g.add(glow);
+  return g;
+}
+
+// Floating HP bar shown above an enemy's head (billboarded to face the camera).
+function buildHpBar() {
+  const W = 1.0, g = new THREE.Group();
+  const bg = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.06, 0.2),
+    new THREE.MeshBasicMaterial({ color: 0x000000, depthTest: false }));   // lost health = black
+  bg.renderOrder = 998; g.add(bg);
+  const fillMat = new THREE.MeshBasicMaterial({ color: 0xee1c1c, depthTest: false });   // current health = red
+  const fillG = new THREE.Group(); fillG.position.x = -W / 2;          // left-anchor pivot
+  const fill = new THREE.Mesh(new THREE.PlaneGeometry(W, 0.13), fillMat);
+  fill.position.x = W / 2; fill.renderOrder = 999; fillG.add(fill);
+  g.add(fillG);
+  return { group: g, fillG, fillMat };
+}
+
+// ---- BOSS: a big menacing brute-king, one per level ----
+function buildBoss(world, tier) {
+  const g = new THREE.Group();
+  const name = world ? world.name : '';
+  const eyeMat = new THREE.MeshStandardMaterial({ color: 0xff3020, emissive: 0xff2010, emissiveIntensity: 1.6 });
+  const eyes = (y, z, sx, r, mat) => { for (const s of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 10), mat || eyeMat); e.position.set(s * sx, y, z); g.add(e); } };
+  let body;
+
+  if (name === 'Iceland') {
+    // ❄️ FROST MONARCH — jagged crystalline body + icicle crown + shoulder shards
+    const ice = new THREE.MeshStandardMaterial({ color: 0xaee6ff, emissive: 0x4ab0e0, emissiveIntensity: 0.55, roughness: 0.2, metalness: 0.1, transparent: true, opacity: 0.95, flatShading: true });
+    body = new THREE.Mesh(new THREE.IcosahedronGeometry(0.98, 0), ice);
+    body.position.y = 1.05; body.castShadow = true; g.add(body);
+    for (let i = 0; i < 7; i++) { const a = (i / 7) * Math.PI * 2; const ic = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.9 + (i % 2 ? 0.45 : 0), 5), ice); ic.position.set(Math.cos(a) * 0.72, 2.0, Math.sin(a) * 0.72); g.add(ic); }
+    for (const sx of [-1, 1]) { const sh = new THREE.Mesh(new THREE.OctahedronGeometry(0.4, 0), ice); sh.position.set(sx * 0.95, 1.15, 0); g.add(sh); }
+    eyes(1.12, 0.82, 0.3, 0.16, new THREE.MeshStandardMaterial({ color: 0x66e0ff, emissive: 0x33b0ff, emissiveIntensity: 1.6 }));
+  } else if (name === 'Desert') {
+    // 🦂 SCORPION KING — sandy carapace, big claws, curling stinger tail
+    const sand = new THREE.MeshStandardMaterial({ color: 0xd9a441, emissive: 0x5a3a10, emissiveIntensity: 0.3, roughness: 0.6, flatShading: true });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x6a4418, roughness: 0.8 });
+    body = new THREE.Mesh(new THREE.SphereGeometry(0.95, 14, 14), sand);
+    body.scale.set(1.25, 0.85, 1.1); body.position.y = 0.85; body.castShadow = true; g.add(body);
+    for (const sx of [-1, 1]) {
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.85, 8), sand); arm.position.set(sx * 0.95, 0.85, 0.6); arm.rotation.z = sx * 0.5; g.add(arm);
+      const claw = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.7, 6), sand); claw.position.set(sx * 1.25, 0.85, 1.05); claw.rotation.x = Math.PI / 2; g.add(claw);
+    }
+    let ty = 1.2, tz = -0.8;
+    for (let i = 0; i < 5; i++) { ty += 0.3; tz -= 0.14 - i * 0.05; const seg = new THREE.Mesh(new THREE.SphereGeometry(0.28 - i * 0.03, 10, 10), sand); seg.position.set(0, ty, tz); g.add(seg); }
+    const sting = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.55, 6), dark); sting.position.set(0, ty + 0.32, tz + 0.12); sting.rotation.x = -0.7; g.add(sting);
+    eyes(1.1, 0.85, 0.24, 0.13);
+  } else if (name === 'Jungle') {
+    // 🌿 STONE IDOL — mossy rock head, leafy mane, wooden antlers
+    const stone = new THREE.MeshStandardMaterial({ color: 0x5a6e4a, emissive: 0x1a2a14, emissiveIntensity: 0.3, roughness: 0.95, flatShading: true });
+    const leaf = new THREE.MeshStandardMaterial({ color: 0x2e8b3a, roughness: 0.8, flatShading: true });
+    const wood = new THREE.MeshStandardMaterial({ color: 0x6b4a2a, roughness: 0.85 });
+    body = new THREE.Mesh(new THREE.DodecahedronGeometry(1.02, 0), stone);
+    body.position.y = 1.05; body.castShadow = true; g.add(body);
+    for (let i = 0; i < 9; i++) { const a = (i / 9) * Math.PI * 2; const lf = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.75, 5), leaf); lf.position.set(Math.cos(a) * 1.05, 1.6, Math.sin(a) * 1.05); lf.rotation.x = Math.cos(a) * 0.5; lf.rotation.z = -Math.sin(a) * 0.5; g.add(lf); }
+    for (const sx of [-1, 1]) { const an = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.9, 5), wood); an.position.set(sx * 0.45, 2.05, 0); an.rotation.z = sx * -0.45; g.add(an); }
+    eyes(1.1, 0.88, 0.3, 0.15, new THREE.MeshStandardMaterial({ color: 0xaff070, emissive: 0x66cc20, emissiveIntensity: 1.5 }));
+  } else if (name === 'Volcano') {
+    // 🌋 MAGMA LORD — dark rock body laced with glowing lava + flame crown
+    const rock = new THREE.MeshStandardMaterial({ color: 0x2a1c18, roughness: 0.95, flatShading: true });
+    const lava = new THREE.MeshStandardMaterial({ color: 0xff6a1a, emissive: 0xff4400, emissiveIntensity: 1.3 });
+    body = new THREE.Mesh(new THREE.IcosahedronGeometry(1.02, 0), rock);
+    body.position.y = 1.05; body.castShadow = true; g.add(body);
+    for (let i = 0; i < 7; i++) { const a = (i / 7) * Math.PI * 2; const lv = new THREE.Mesh(new THREE.SphereGeometry(0.19, 8, 8), lava); lv.position.set(Math.cos(a) * 0.88, 1.05 + Math.sin(a * 2) * 0.45, Math.sin(a) * 0.88); g.add(lv); }
+    for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; const fl = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.85, 5), lava); fl.position.set(Math.cos(a) * 0.62, 2.0, Math.sin(a) * 0.62); g.add(fl); }
+    eyes(1.1, 0.85, 0.3, 0.17, new THREE.MeshStandardMaterial({ color: 0xffd040, emissive: 0xff8800, emissiveIntensity: 1.7 }));
+  } else if (name === 'Swamp') {
+    // 🐍 BOG HYDRA — bulbous mossy body with three snaking necks + toxic maw
+    const flesh = new THREE.MeshStandardMaterial({ color: 0x4a6e3a, emissive: 0x14280e, emissiveIntensity: 0.35, roughness: 0.7, flatShading: true });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x2e3a22, roughness: 0.85 });
+    body = new THREE.Mesh(new THREE.SphereGeometry(1.0, 14, 12), flesh);
+    body.scale.set(1.2, 0.85, 1.1); body.position.y = 0.9; body.castShadow = true; g.add(body);
+    for (const nx of [-0.5, 0, 0.5]) {                       // three serpent necks + heads
+      const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.2, 1.3, 8), flesh);
+      neck.position.set(nx, 1.7, 0.4); neck.rotation.x = -0.5 + nx * 0.2; g.add(neck);
+      const head = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.6, 8), flesh);
+      head.position.set(nx, 2.3, 0.95); head.rotation.x = 1.1; head.castShadow = true; g.add(head);
+      const e = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), eyeMat); e.position.set(nx, 2.4, 1.15); g.add(e);
+    }
+    for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; const sp = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.5, 5), dark); sp.position.set(Math.cos(a) * 0.9, 1.1, Math.sin(a) * 0.9); sp.rotation.x = Math.PI; g.add(sp); }
+  } else if (name === 'Crystal Caverns') {
+    // 💎 PRISM TYRANT — towering violet crystal cluster, floating shards, glowing core
+    const crys = new THREE.MeshStandardMaterial({ color: 0xb060ff, emissive: 0x7a2adf, emissiveIntensity: 0.6, roughness: 0.15, metalness: 0.2, transparent: true, opacity: 0.95, flatShading: true });
+    body = new THREE.Mesh(new THREE.OctahedronGeometry(1.05, 0), crys);
+    body.scale.set(0.95, 1.3, 0.95); body.position.y = 1.2; body.castShadow = true; g.add(body);
+    for (let i = 0; i < 7; i++) { const a = (i / 7) * Math.PI * 2; const sh = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.9 + (i % 2) * 0.5, 5), crys); sh.position.set(Math.cos(a) * 0.85, 1.2 + Math.cos(a * 3) * 0.3, Math.sin(a) * 0.85); sh.rotation.x = Math.cos(a) * 0.6; sh.rotation.z = -Math.sin(a) * 0.6; g.add(sh); }
+    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.32, 0), new THREE.MeshStandardMaterial({ color: 0xffaaff, emissive: 0xff66ff, emissiveIntensity: 1.6 })); core.position.y = 1.2; g.add(core);
+    eyes(1.7, 0.7, 0.26, 0.13, new THREE.MeshStandardMaterial({ color: 0xff90ff, emissive: 0xff40ff, emissiveIntensity: 1.7 }));
+  } else if (name === 'Storm Peaks') {
+    // 🐉 STORM DRAKE — sleek slate-blue wyvern with crackling wings + spark horns
+    const hide = new THREE.MeshStandardMaterial({ color: 0x5a6f8f, emissive: 0x1a2a4a, emissiveIntensity: 0.35, roughness: 0.55, flatShading: true });
+    const spark = new THREE.MeshStandardMaterial({ color: 0x99ccff, emissive: 0x66aaff, emissiveIntensity: 1.5 });
+    body = new THREE.Mesh(new THREE.SphereGeometry(0.95, 14, 12), hide);
+    body.scale.set(1.05, 1.0, 1.25); body.position.y = 1.0; body.castShadow = true; g.add(body);
+    const snout = new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.9, 8), hide); snout.position.set(0, 1.0, 1.0); snout.rotation.x = Math.PI / 2; g.add(snout);
+    for (const sx of [-1, 1]) {                              // swept-back wings
+      const wing = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.8, 4), hide);
+      wing.position.set(sx * 1.3, 1.3, -0.3); wing.rotation.z = sx * 1.1; wing.scale.set(0.3, 1, 1.2); g.add(wing);
+      const h = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.6, 5), spark); h.position.set(sx * 0.3, 1.7, 0.5); h.rotation.z = sx * -0.3; g.add(h);
+    }
+    eyes(1.2, 1.0, 0.26, 0.13, spark);
+  } else if (name === 'Shadow Realm') {
+    // 👁️ SHADE KING — wraithlike void body, jagged shadow crown, burning eyes
+    const shade = new THREE.MeshStandardMaterial({ color: 0x1a1228, emissive: 0x3a1a6a, emissiveIntensity: 0.5, roughness: 0.8, flatShading: true });
+    const flame = new THREE.MeshStandardMaterial({ color: 0x9a4aff, emissive: 0x7a2aff, emissiveIntensity: 1.4 });
+    body = new THREE.Mesh(new THREE.IcosahedronGeometry(1.05, 0), shade);
+    body.position.y = 1.1; body.castShadow = true; g.add(body);
+    for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; const sp = new THREE.Mesh(new THREE.ConeGeometry(0.16, 1.0 + (i % 2) * 0.5, 4), shade); sp.position.set(Math.cos(a) * 0.7, 2.1, Math.sin(a) * 0.7); g.add(sp); }
+    for (const sx of [-1, 1]) { const w = new THREE.Mesh(new THREE.OctahedronGeometry(0.42, 0), flame); w.position.set(sx * 1.05, 1.2, 0); g.add(w); }
+    eyes(1.2, 0.85, 0.32, 0.18, flame);
+  } else if (name === 'Clockwork Citadel') {
+    // ⚙️ GEAR COLOSSUS — riveted brass body girdled by spinning gear rings
+    const brass = new THREE.MeshStandardMaterial({ color: 0xb89a55, metalness: 0.8, roughness: 0.35, flatShading: true });
+    const iron = new THREE.MeshStandardMaterial({ color: 0x6a5e44, metalness: 0.7, roughness: 0.5 });
+    body = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.05, 1.7, 10), brass);
+    body.position.y = 1.05; body.castShadow = true; g.add(body);
+    for (const ry of [0.7, 1.5]) {                           // gear belts
+      const gear = new THREE.Mesh(new THREE.TorusGeometry(1.05, 0.16, 6, 16), iron);
+      gear.rotation.x = Math.PI / 2; gear.position.y = ry; g.add(gear);
+      for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; const t = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), iron); t.position.set(Math.cos(a) * 1.15, ry, Math.sin(a) * 1.15); g.add(t); }
+    }
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.6, 0.7), brass); head.position.y = 2.2; head.castShadow = true; g.add(head);
+    eyes(2.25, 0.36, 0.18, 0.12, new THREE.MeshStandardMaterial({ color: 0xff6a2a, emissive: 0xff4400, emissiveIntensity: 1.6 }));
+  } else {
+    // generic fallback boss
+    const mat = new THREE.MeshStandardMaterial({ color: 0x6a3a4a, emissive: 0x2a1018, emissiveIntensity: 0.4, roughness: 0.7, flatShading: true });
+    body = new THREE.Mesh(new THREE.IcosahedronGeometry(1.05, 0), mat);
+    body.position.y = 1.1; body.castShadow = true; g.add(body);
+    eyes(1.15, 0.85, 0.3, 0.16);
+  }
+
+  g.userData.body = body;
+  g.scale.setScalar(1.8 + tier * 0.12);
+  return g;
+}
+
+// Spawn the level's boss once all eggs are gathered.
+function spawnBoss() {
+  state.bossActive = true; state.bossDefeated = false;
+  const world = WORLDS[state.worldIndex];
+  const hp = 18 + state.worldIndex * 9;   // one boss per world, so make it a real fight
+  const bx = 0, bz = -8;
+  const b = buildBoss(world, state.worldIndex);
+  b.position.set(bx, 0, bz);
+  levelGroup.add(b);
+  const entry = {
+    group: b, x: bx, z: bz, baseX: bx, baseZ: bz, phase: 0, alive: true, respawn: 0,
+    hp, maxHp: hp, speed: 2.6 + state.worldIndex * 0.3, lastHit: -1, frozen: 0,
+    kind: 'boss', behavior: 'boss', knockResist: 0.75, isBoss: true, bossWorld: state.worldIndex,
+    chargeTimer: 2.5, dashTime: 0, dashDirX: 0, dashDirZ: 0, shootTimer: 1.8,
+    burstTimer: 2.4, summonTimer: 4, lavaTimer: 2.2, poundTimer: 3,
+  };
+  enemies.push(entry);
+  state.boss = entry;
+  bigFlash('⚠️ BOSS!');
+  showHint('A BOSS guards the portal — defeat it to escape!');
+  document.getElementById('bossName').textContent = '⚠️ ' + world.name.toUpperCase() + ' BOSS';
+  document.getElementById('bossBar').style.visibility = 'visible';
+  updateBossBar();
+}
+
+function updateBossBar() {
+  const b = state.boss;
+  const pct = b ? Math.max(0, b.hp) / b.maxHp * 100 : 0;
+  document.getElementById('bossFill').style.width = pct + '%';
+}
+
+// Exit portal
+function buildPortal(world) {
+  const grp = new THREE.Group();
+  const ringMat = new THREE.MeshStandardMaterial({ color: 0xffd34d, emissive: 0xffaa00, emissiveIntensity: 0.6, roughness: 0.3 });
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.3, 0.22, 12, 32), ringMat);
+  ring.position.y = 1.4; grp.add(ring);
+  const innerMat = new THREE.MeshStandardMaterial({ color: 0x66e0ff, emissive: 0x33ccff, emissiveIntensity: 0.9, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+  const inner = new THREE.Mesh(new THREE.CircleGeometry(1.15, 32), innerMat);
+  inner.position.y = 1.4; grp.add(inner);
+  grp.userData = { ring, inner, innerMat, ringMat };
+  return grp;
+}
+
+// ---- Giant castle (boss reward): a grand keep whose courtyard holds the caged eggs ----
+function buildCastle(world) {
+  const grp = new THREE.Group();
+  const stone = new THREE.MeshStandardMaterial({ color: world.houseWall || 0xb9b2a6, roughness: 0.9, flatShading: true });
+  const roofMat = new THREE.MeshStandardMaterial({ color: world.houseRoof || 0x6a4a8a, roughness: 0.7, flatShading: true });
+  // tall back rampart with crenellations
+  const wall = new THREE.Mesh(new THREE.BoxGeometry(18, 7, 1.4), stone);
+  wall.position.set(0, 3.5, -3.5); wall.castShadow = true; wall.receiveShadow = true; grp.add(wall);
+  for (let i = -8; i <= 8; i += 2) {
+    const cren = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.0, 1.4), stone);
+    cren.position.set(i, 7.5, -3.5); grp.add(cren);
+  }
+  // a great central gateway (archway) in the back wall, framing the portal
+  const arch = new THREE.Mesh(new THREE.BoxGeometry(3.4, 4.4, 1.6), new THREE.MeshStandardMaterial({ color: 0x0a0a12, roughness: 1 }));
+  arch.position.set(0, 2.4, -3.4); grp.add(arch);
+  // four corner towers with conical roofs + flags
+  for (const sx of [-1, 1]) for (const dz of [-3.5, 3.2]) {
+    const tower = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.9, 9, 12), stone);
+    tower.position.set(sx * 8.5, 4.5, dz); tower.castShadow = true; grp.add(tower);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(2.1, 3, 12), roofMat);
+    roof.position.set(sx * 8.5, 10.4, dz); roof.castShadow = true; grp.add(roof);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.2, 6), new THREE.MeshStandardMaterial({ color: 0x553311 }));
+    pole.position.set(sx * 8.5, 12.4, dz); grp.add(pole);
+    const flag = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.55, 0.05), new THREE.MeshStandardMaterial({ color: world.glow || 0xffd34d, emissive: world.glow || 0xffd34d, emissiveIntensity: 0.5 }));
+    flag.position.set(sx * 8.5 + 0.5, 12.6, dz); grp.add(flag);
+  }
+  // side walls reaching toward the player so it reads as an enclosure you walk into
+  for (const sx of [-1, 1]) {
+    const side = new THREE.Mesh(new THREE.BoxGeometry(1.2, 6, 7), stone);
+    side.position.set(sx * 8.5, 3, 0.5); side.castShadow = true; grp.add(side);
+  }
+  return grp;
+}
+
+// The cage of eggs at the castle's heart — golden bars that lift away once unlocked.
+function buildCage() {
+  const grp = new THREE.Group();
+  const barMat = new THREE.MeshStandardMaterial({ color: 0xe0b23a, metalness: 0.7, roughness: 0.35, emissive: 0x3a2600, emissiveIntensity: 0.4 });
+  const R = 2.2, H = 3.0;
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, H, 6), barMat);
+    bar.position.set(Math.cos(a) * R, H / 2, Math.sin(a) * R); grp.add(bar);
+  }
+  for (const ry of [0.2, H]) {                    // top + bottom binding rings
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(R, 0.12, 8, 28), barMat);
+    ring.rotation.x = Math.PI / 2; ring.position.y = ry; grp.add(ring);
+  }
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(R, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+    new THREE.MeshStandardMaterial({ color: 0xe0b23a, metalness: 0.7, roughness: 0.35, transparent: true, opacity: 0.5, wireframe: true }));
+  dome.position.y = H; grp.add(dome);
+  return grp;
+}
+
+// A golden key a defeated boss drops; grabbing it unlocks the castle cage.
+function buildKey() {
+  const g = new THREE.Group();
+  const gold = new THREE.MeshStandardMaterial({ color: 0xffd24d, metalness: 0.8, roughness: 0.25, emissive: 0xffaa00, emissiveIntensity: 0.7 });
+  const bow = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.1, 10, 20), gold);
+  bow.position.y = 0.55; g.add(bow);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.9, 8), gold);
+  shaft.position.y = -0.05; g.add(shaft);
+  for (const ty of [-0.4, -0.28]) {               // teeth
+    const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.1, 0.1), gold);
+    tooth.position.set(0.13, ty, 0); g.add(tooth);
+  }
+  return g;
+}
+
+// Drop the boss's key at (x,z) — floats and glows until collected.
+function addKey(x, z) {
+  const inner = buildKey();
+  const g = new THREE.Group(); g.add(inner); g.position.set(x, 1.3, z);
+  const halo = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.42, 2.8, 14, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0xffd24d, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide }));
+  halo.position.y = -0.2; g.add(halo);
+  levelGroup.add(g);
+  keyDrop = { group: g, inner, x, z, taken: false, bob: 0 };
+}
+
+// ============================================================
+//  GAME STATE
+// ============================================================
+const state = {
+  worldIndex: 0,
+  levelIndex: 0,
+  fishTotal: 0,
+  fishGot: 0,
+  totalCollected: 0,
+  running: false,
+  paused: false,
+  velocity: new THREE.Vector3(),
+  pos: new THREE.Vector3(0, 0, 0),
+  facing: 0,
+  vy: 0, jumping: false, hover: 0, hoverUsed: false, spaceHeld: false,
+  walkPhase: 0,
+  invuln: 0,
+  sliding: false, slideTime: 0, slideCd: 0,
+  weapon: null, ammo: 0, attackCd: 0, swing: 0, swingDur: 0, spin: false, punch: 0,
+  charge: 0, charging: false, fHeld: false, combo: 0, comboTimer: 0,
+  blocking: false, parryTimer: 0,
+  inTutorial: false, tutIndex: 0, tutDone: false,
+  hp: 3, maxHp: 3, bossActive: false, bossDefeated: false, boss: null, bossLevel: false,
+  hasKey: false, castleLevel: false,
+  maxUnlocked: -1, completed: {},
+  rally: false, rallyAll: false, rallyQueue: [],
+  coins: 0, owned: null, equipped: 'classic',
+  playground: false, pgMode: 'enemies', pgWorld: 0, pgBossTimer: 0,
+  trailHist: [],
+};
+const BOSS_NAMES = ['Frost Monarch', 'Scorpion King', 'Stone Idol', 'Magma Lord',
+  'Bog Hydra', 'Prism Tyrant', 'Storm Drake', 'Shade King', 'Gear Colossus'];
+
+// Power-up weapons (ammo is starting charges; sword is unlimited)
+const WEAPONS = {
+  sword:  { ammo: 10, cd: 0.36, label: '🗡️ Sword',  color: '#d8e0ff' },
+  bow:    { ammo: 10, cd: 0.38, label: '🏹 Bow',     color: '#caa46a' },
+  icicle: { ammo: 10, cd: 0.42, label: '❄️ Icicle',  color: '#9fe6ff' },
+  hammer: { ammo: 10, cd: 0.52, label: '🔨 Hammer',  color: '#e0b46a' },   // slow, heavy, wide AoE + slam
+  flame:  { ammo: 10, cd: 0.40, label: '🔥 Flame Staff', color: '#ff8a3a' }, // piercing fire bolts + cone
+};
+const PROJ_SPEED = 32;
+const CHARGE_TIME = 0.7;   // seconds to fully charge
+const CHARGE_FULL = 0.5;   // release past this = charged special
+
+let groundMesh = null;
+const obstacles = [];   // {group, x, z, r}  (solid rocks/trees)
+const buildings = [];   // {group, x, z, rWall, doorHalf, doorAngle, roof, core}  (enterable)
+const hazards = [];     // {group, x, z, r, moving, baseX, baseZ, phase, glow}
+const fishes = [];      // {group, x, z, collected}  (eggs)
+const enemies = [];     // {group, x, z, baseX, baseZ, phase, alive, respawn, hp, speed, lastHit, frozen}
+const powerups = [];    // {group, x, z, type, bob, taken}
+const chests = [];      // {group, lid, x, z, loot, opened, openT}  (hidden treasure: potion or eggs)
+const projectiles = []; // {group, x, z, vx, vz, type, life, pierce, hit, homing}
+const enemyShots = [];  // {group, x, z, vx, vz, life}  (caster fireballs)
+const ladders = [];     // {x, z, r, top}  (climb up to reach high eggs)
+const platforms = [];   // {x, z, r, top}  (raised areas you can stand on)
+const effects = [];     // {mesh, life, maxLife, maxR}  (shockwaves / novas)
+let portal = null;
+let keyDrop = null;        // the key a defeated boss drops {group, x, z, taken}
+let castleCage = null;     // the cage of eggs in the boss-world castle (bars hide when unlocked)
+const decoGroup = new THREE.Group();
+scene.add(decoGroup);
+const levelGroup = new THREE.Group();
+scene.add(levelGroup);
+
+// ---------- Build a level ----------
+function clearLevel() {
+  while (levelGroup.children.length) levelGroup.remove(levelGroup.children[0]);
+  while (decoGroup.children.length) decoGroup.remove(decoGroup.children[0]);
+  obstacles.length = 0; buildings.length = 0; hazards.length = 0; fishes.length = 0; enemies.length = 0;
+  powerups.length = 0; projectiles.length = 0; effects.length = 0; enemyShots.length = 0; ladders.length = 0; platforms.length = 0;
+  chests.length = 0;
+  portal = null; keyDrop = null; castleCage = null;
+  state.hasKey = false; state.castleLevel = false;
+  if (groundMesh) { scene.remove(groundMesh); groundMesh = null; }
+}
+
+// Create an egg at (x,z), register it as collectible. Clamped so it's reachable.
+function addEgg(x, z, phase, ey) {
+  const lim = ARENA - 2;
+  x = Math.max(-lim, Math.min(lim, x));
+  z = Math.max(-lim, Math.min(lim, z));
+  ey = ey || 0;                              // elevation (atop a ladder)
+  const f = buildEgg();
+  f.position.set(x, 1.2 + ey, z);
+  levelGroup.add(f);
+  fishes.push({ group: f, inner: f.userData.inner, x, z, collected: false, bob: phase, ey });
+  return f;
+}
+
+// A climbable ladder; pairs with an elevated egg at its top.
+function buildLadder(world, height) {
+  const grp = new THREE.Group();
+  const wood = new THREE.MeshStandardMaterial({ color: 0x8a5a2a, roughness: 0.8 });
+  for (const sx of [-0.4, 0.4]) {
+    const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, height, 8), wood);
+    rail.position.set(sx, height / 2, 0); rail.castShadow = true; grp.add(rail);
+  }
+  const rungs = Math.floor(height / 0.6);
+  for (let i = 1; i < rungs; i++) {
+    const r = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.95, 6), wood);
+    r.rotation.z = Math.PI / 2; r.position.set(0, i * 0.6, 0); grp.add(r);
+  }
+  // small platform at the top
+  const plat = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.25, 1.6),
+    new THREE.MeshStandardMaterial({ color: world.groundAccent, roughness: 0.9 }));
+  plat.position.set(0, height + 0.12, -0.4); plat.castShadow = true; plat.receiveShadow = true; grp.add(plat);
+  return grp;
+}
+
+function addLadder(world, x, z, top) {
+  const lad = buildLadder(world, top);
+  lad.position.set(x, 0, z);
+  levelGroup.add(lad);
+  ladders.push({ x, z, r: 1.4, top });
+}
+
+// A raised area (deck on legs) you can walk around on, reached by a ladder.
+function buildSkyPlatform(world, R, H) {
+  const grp = new THREE.Group();
+  const deck = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.4, 28),
+    new THREE.MeshStandardMaterial({ color: world.groundAccent, roughness: 0.9 }));
+  deck.position.y = H - 0.2; deck.castShadow = true; deck.receiveShadow = true; grp.add(deck);   // top surface at H
+  // low rim so the edge reads
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(R - 0.05, 0.12, 8, 36),
+    new THREE.MeshStandardMaterial({ color: world.obstacleColor, roughness: 0.85 }));
+  rim.rotation.x = Math.PI / 2; rim.position.y = H + 0.05; grp.add(rim);
+  // support legs to the ground
+  const legMat = new THREE.MeshStandardMaterial({ color: world.obstacleColor, roughness: 0.9, flatShading: true });
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + 0.3;
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, H, 6), legMat);
+    leg.position.set(Math.cos(a) * (R * 0.66), H / 2, Math.sin(a) * (R * 0.66)); leg.castShadow = true; grp.add(leg);
+  }
+  return grp;
+}
+
+// Build a sky area at (x,z): platform + an edge ladder up to it.
+function addSkyArea(world, x, z, R, H) {
+  const pf = buildSkyPlatform(world, R, H);
+  pf.position.set(x, 0, z); levelGroup.add(pf);
+  platforms.push({ x, z, r: R, top: H });
+  addLadder(world, x, z + R - 0.4, H);   // ladder climbs onto the deck edge
+}
+
+// Create a floating power-up pickup.
+function addPowerup(x, z, type, phase) {
+  const lim = ARENA - 2;
+  x = Math.max(-lim, Math.min(lim, x));
+  z = Math.max(-lim, Math.min(lim, z));
+  const g = buildPowerup(type);
+  g.position.set(x, 1.2, z);
+  levelGroup.add(g);
+  powerups.push({ group: g, inner: g.userData.inner, x, z, type, bob: phase, taken: false });
+}
+
+// ---- Hidden treasure chest (holds a healing potion or a clutch of bonus eggs) ----
+function buildChest(loot) {
+  const g = new THREE.Group();
+  const wood = new THREE.MeshStandardMaterial({ color: 0x7a4a22, roughness: 0.85 });
+  const darkWood = new THREE.MeshStandardMaterial({ color: 0x5a3318, roughness: 0.85 });
+  const metal = new THREE.MeshStandardMaterial({ color: 0xd9a73a, metalness: 0.7, roughness: 0.35, emissive: 0x3a2600, emissiveIntensity: 0.45 });
+  // base box
+  const base = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.8, 1.0), wood);
+  base.position.y = 0.4; base.castShadow = true; base.receiveShadow = true; g.add(base);
+  for (const bx of [-0.58, 0.58]) {              // metal corner bands
+    const band = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.84, 1.04), metal);
+    band.position.set(bx, 0.4, 0); g.add(band);
+  }
+  // lid — its own group, pivoting about the back-top edge so it can swing open
+  const lid = new THREE.Group();
+  const lidBox = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.32, 1.0), darkWood);
+  lidBox.position.set(0, 0.16, 0.5); lidBox.castShadow = true; lid.add(lidBox);
+  for (const bx of [-0.58, 0.58]) {
+    const band = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.36, 1.04), metal);
+    band.position.set(bx, 0.16, 0.5); lid.add(band);
+  }
+  lid.position.set(0, 0.8, -0.5);                // hinge at the rear top edge of the base
+  g.add(lid);
+  const lock = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.3, 0.12), metal);
+  lock.position.set(0, 0.72, 0.52); g.add(lock);
+  g.userData = { lid, loot };
+  return g;
+}
+
+// Drop a hidden chest at (x,z). loot = 'potion' | 'egg'.
+function addChest(x, z, loot) {
+  const lim = ARENA - 2;
+  x = Math.max(-lim, Math.min(lim, x));
+  z = Math.max(-lim, Math.min(lim, z));
+  const g = buildChest(loot);
+  g.position.set(x, 0, z);
+  g.rotation.y = Math.atan2(state.pos.x - x, state.pos.z - z);   // roughly face spawn so the lid reads
+  levelGroup.add(g);
+  chests.push({ group: g, lid: g.userData.lid, x, z, loot, opened: false, openT: 0 });
+}
+
+// Pip touched a chest: pop it open and hand over the loot.
+function openChest(ch) {
+  spawnRing(ch.x, ch.z, ch.loot === 'potion' ? 0x66ff99 : 0xffe066, 3.2);
+  if (ch.loot === 'potion') {
+    if (state.hp < state.maxHp) {
+      state.hp = Math.min(state.maxHp, state.hp + 1);
+      updateHearts();
+      showHint('🧪 Healing potion! +1 ❤️');
+    } else {
+      state.coins += 2; saveProgress(); updateHUD();
+      showHint('🧪 Potion! Already full — +2 🥚 banked');
+    }
+  } else {
+    const n = 3;                                  // bonus shop eggs (currency)
+    state.coins += n; state.totalCollected += n; saveProgress(); updateHUD();
+    showHint('🥚 Treasure chest! +' + n + ' eggs');
+  }
+}
+
+// Apply damage + knockback (kx,kz = unit knock dir) to an enemy; optional freeze.
+// `knock` is the knockback distance in units (defaults to a light shove).
+function damageEnemy(en, dmg, kx, kz, freeze, knock) {
+  en.hp -= dmg;
+  const k = (knock || 1.8) * (1 - (en.knockResist || 0));   // brutes resist knockback
+  en.x += kx * k; en.z += kz * k;
+  if (freeze) en.frozen = 1.6;
+  if (en.hp <= 0) {
+    en.alive = false; en.group.visible = false;
+    if (en.isBoss) {
+      state.bossActive = false; state.boss = null;
+      document.getElementById('bossBar').style.visibility = 'hidden';
+      bigFlash('🏆');
+      state.bossDefeated = true;
+      if (state.playground) { state.pgBossTimer = 2.5; showHint('Boss down! Respawning for more practice…'); }
+      else if (state.castleLevel) {
+        addKey(en.x, en.z);   // boss drops the castle key right where it fell
+        showHint('🏆 BOSS DOWN! It dropped a 🗝️ key — grab it to unlock the castle cage!');
+      }
+      else { showHint('BOSS DEFEATED! The portal is open! ✨'); if (portal) portal.userData.innerMat.opacity = 0.9; }
+    } else {
+      en.respawn = 6;
+      if (en.kind === 'bomber') {
+        // 💥 bombers detonate: a shockwave that hurts Pip and knocks back nearby foes
+        spawnRing(en.x, en.z, 0xff7a2a, 4.5);
+        const bd = Math.hypot(state.pos.x - en.x, state.pos.z - en.z);
+        if (bd < 3.2 && state.invuln <= 0) takeDamage();
+        for (const o of enemies) {
+          if (!o.alive || o === en) continue;
+          const ox = o.x - en.x, oz = o.z - en.z, od = Math.hypot(ox, oz);
+          if (od < 3.5) damageEnemy(o, 1, ox / (od || 1), oz / (od || 1), false, 5);
+        }
+        showHint('💥 Bomber blast!');
+      } else {
+        showHint('Enemy down! 💥');
+      }
+    }
+  } else {
+    if (en.isBoss) updateBossBar();
+    showHint(`Hit! ${en.hp} HP left 💢`);
+  }
+}
+
+// Caster fires a fireball toward the penguin.
+function fireEnemyShot(en) {
+  const dx = state.pos.x - en.x, dz = state.pos.z - en.z, d = Math.hypot(dx, dz) || 1;
+  const g = buildEnemyShot();
+  g.position.set(en.x, 1.0, en.z);
+  levelGroup.add(g);
+  enemyShots.push({ group: g, x: en.x, z: en.z, vx: dx / d * 17, vz: dz / d * 17, life: 2.4 });
+}
+
+// Find a spot for an object of footprint `radius` that keeps a clear GAP from the
+// EDGE of every object already placed (each `taken` entry stores its own radius).
+const PLACE_GAP = 2.6;   // minimum clear ground between any two objects
+function placeNoOverlap(rng, radius, taken, tries = 50) {
+  const lim = ARENA - 3 - radius;                 // keep the whole footprint inside the field
+  for (let i = 0; i < tries; i++) {
+    const x = (rng() * 2 - 1) * lim;
+    const z = (rng() * 2 - 1) * lim;
+    if (Math.hypot(x, z) < 5 + radius) continue;  // keep spawn clear (scaled by size)
+    let ok = true;
+    for (const t of taken) {
+      if (Math.hypot(x - t.x, z - t.z) < radius + (t.r || 0) + PLACE_GAP) { ok = false; break; }
+    }
+    if (ok) { taken.push({ x, z, r: radius }); return { x, z }; }
+  }
+  return null;
+}
+
+// Scene atmosphere + ground + mountain border ring (shared by levels & tutorial).
+function setupArena(world, seed) {
+  scene.background = new THREE.Color(world.sky);
+  scene.fog = new THREE.Fog(world.fog, 45, 110);
+  ambLight.color.setHex(0xffffff);
+  ambLight.intensity = world.dim ? 0.35 : 0.55;
+  sunLight.intensity = world.dim ? 0.5 : 0.95;
+  hemiLight.color.setHex(world.sky);
+
+  const groundGeo = new THREE.PlaneGeometry((ARENA + 16) * 2, (ARENA + 16) * 2, 1, 1);
+  const groundMat = new THREE.MeshStandardMaterial({ color: world.ground, roughness: 0.95 });
+  groundMesh = new THREE.Mesh(groundGeo, groundMat);
+  groundMesh.rotation.x = -Math.PI / 2; groundMesh.receiveShadow = true;
+  scene.add(groundMesh);
+
+  const mrng = makeRNG(seed + 777);
+  const perSide = 10, reach = ARENA + 5;
+  for (let side = 0; side < 4; side++) {
+    for (let i = 0; i < perSide; i++) {
+      const along = ((i / (perSide - 1)) * 2 - 1) * reach + (mrng() - 0.5) * 5;
+      const out = ARENA + 3 + mrng() * 7;
+      let x, z;
+      if (side === 0) { x = along; z = out; }
+      else if (side === 1) { x = along; z = -out; }
+      else if (side === 2) { x = out; z = along; }
+      else { x = -out; z = along; }
+      const mtn = buildMountain(world, mrng);
+      mtn.position.x = x; mtn.position.z = z;
+      levelGroup.add(mtn);
+    }
+  }
+  for (const [cx, cz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+    const mtn = buildMountain(world, mrng);
+    mtn.position.set(cx * (ARENA + 6), 0, cz * (ARENA + 6));
+    mtn.scale.setScalar(1.3);
+    levelGroup.add(mtn);
+  }
+}
+
+// Put Pip back at the spawn with a clean state (no weapon, no eggs).
+function resetPenguin() {
+  state.pos.set(0, 0, 0);
+  state.velocity.set(0, 0, 0);
+  state.vy = 0; state.jumping = false; state.hover = 0; state.hoverUsed = false; state.spaceHeld = false;
+  state.facing = 0; state.invuln = 0;
+  state.sliding = false; state.slideTime = 0; state.slideCd = 0;
+  state.attackCd = 0; state.swing = 0;
+  state.charge = 0; state.charging = false; state.fHeld = false; state.combo = 0; state.comboTimer = 0;
+  state.blocking = false; state.parryTimer = 0;
+  penguin.position.set(0, 0, 0);
+  penguin.rotation.set(0, 0, 0);
+  state.trailHist.length = 0;
+  setCarryStack(0);
+  armWeapon(null);
+  // fresh hearts + clear boss each level
+  state.hp = state.maxHp;
+  state.bossActive = false; state.bossDefeated = false; state.boss = null;
+  document.getElementById('bossBar').style.visibility = 'hidden';
+  updateHearts();
+}
+
+// Custom boss battleground: a ringed arena with cover pillars.
+function buildBattleground(world) {
+  const ringCol = world.glow || 0x66ff88;
+  // arena floor medallion
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(20, 48),
+    new THREE.MeshStandardMaterial({ color: world.groundAccent, roughness: 0.9 }));
+  disc.rotation.x = -Math.PI / 2; disc.position.y = 0.02; disc.receiveShadow = true; levelGroup.add(disc);
+  // glowing rune rings
+  for (const r of [13, 7]) {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.45, 8, 64),
+      new THREE.MeshStandardMaterial({ color: ringCol, emissive: ringCol, emissiveIntensity: 0.7, roughness: 0.4 }));
+    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.1; levelGroup.add(ring);
+  }
+  // cover pillars (solid — duck behind them to dodge fireballs)
+  const pillarMat = new THREE.MeshStandardMaterial({ color: world.obstacleColor, roughness: 0.9, flatShading: true });
+  const N = 8;
+  for (let i = 0; i < N; i++) {
+    const a = (i / N) * Math.PI * 2 + 0.39;
+    const px = Math.cos(a) * 13, pz = Math.sin(a) * 13, h = 3.4;
+    const pil = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.15, h, 8), pillarMat);
+    pil.position.set(px, h / 2, pz); pil.castShadow = true; pil.receiveShadow = true; levelGroup.add(pil);
+    obstacles.push({ group: pil, x: px, z: pz, r: 1.05 });
+  }
+}
+
+// Per-level seed overrides — bump a level's salt to reshuffle its object layout.
+const LEVEL_SEED_SALT = { '1-1': 5137 };   // World 2, Level 2 reshuffled
+
+function buildLevel() {
+  clearLevel();
+  const world = WORLDS[state.worldIndex];
+  const salt = LEVEL_SEED_SALT[state.worldIndex + '-' + state.levelIndex] || 0;
+  const seed = (state.worldIndex + 1) * 1000 + (state.levelIndex + 1) * 37 + salt;
+  const rng = makeRNG(seed);
+  setupArena(world, seed);
+  state.bossLevel = (state.levelIndex === world.levels - 1);   // last level of a world = boss
+
+  // ---- BOSS BATTLEGROUND (end of each world) ----
+  if (state.bossLevel) {
+    if (world.dim) { ambLight.intensity = 0.4; sunLight.intensity = 0.7; }
+    buildBattleground(world);
+    // A castle level (campaign only) hides the world's portal behind a caged-egg rescue.
+    state.castleLevel = !state.rally && !state.playground;
+
+    if (state.castleLevel) {
+      // Giant castle at the back; portal sits in its gateway, caged eggs in the courtyard.
+      const castle = buildCastle(world);
+      castle.position.set(0, 0, -20); levelGroup.add(castle);
+      castleCage = buildCage();
+      castleCage.position.set(0, 0, -18); levelGroup.add(castleCage);
+      // the eggs locked inside the cage — they can't be collected until you grab the boss's key
+      const cageN = 5;
+      for (let k = 0; k < cageN; k++) {
+        const a = (k / cageN) * Math.PI * 2;
+        addEgg(Math.cos(a) * 0.9, -18 + Math.sin(a) * 0.9, rng() * Math.PI * 2);
+        fishes[fishes.length - 1].caged = true;
+      }
+      state.fishTotal = cageN; state.fishGot = 0;
+      portal = buildPortal(world);
+      portal.position.set(0, 0, -22.6); portal.userData.x = 0; portal.userData.z = -22.6;   // in the castle gateway
+      levelGroup.add(portal);
+    } else {
+      // rally / playground boss arena: simple portal, no castle
+      state.fishTotal = 0; state.fishGot = 0;
+      portal = buildPortal(world);
+      portal.position.set(0, 0, -15); portal.userData.x = 0; portal.userData.z = -15;
+      levelGroup.add(portal);
+    }
+
+    // arm-up cache: weapons ringed around the arena for the fight
+    addPowerup(-9, 4, 'sword', 0);
+    addPowerup(9, 4, 'bow', 1);
+    addPowerup(0, 10, 'icicle', 2);
+    if (state.worldIndex >= 3) addPowerup(-9, -4, 'hammer', 1.5);
+    if (state.worldIndex >= 4) addPowerup(9, -4, 'flame', 2.5);
+    resetPenguin();
+    spawnBoss();
+    updateHUD();
+    return;
+  }
+
+  const taken = [];
+
+  // Obstacles (more in later levels)
+  const obCount = 6 + state.levelIndex * 3 + state.worldIndex;
+  for (let i = 0; i < obCount; i++) {
+    const p = placeNoOverlap(rng, 1.3, taken);
+    if (!p) continue;
+    const ob = buildObstacle(world);
+    ob.position.set(p.x, 0, p.z);
+    ob.rotation.y = rng() * Math.PI * 2;
+    const r = ob.userData.radius || 1.1;
+    levelGroup.add(ob);
+    obstacles.push({ group: ob, x: p.x, z: p.z, r });
+  }
+
+  // Hazards
+  const hzCount = 2 + state.levelIndex + Math.floor(state.worldIndex / 1.5);
+  for (let i = 0; i < hzCount; i++) {
+    const p = placeNoOverlap(rng, 1.3, taken);
+    if (!p) continue;
+    const hz = buildHazard(world);
+    hz.position.set(p.x, 0, p.z);
+    levelGroup.add(hz);
+    hazards.push({
+      group: hz, x: p.x, z: p.z, r: hz.userData.radius || 1,
+      moving: !!hz.userData.moving, baseX: p.x, baseZ: p.z,
+      phase: rng() * Math.PI * 2, glow: hz.userData.glow || null, spin: hz.userData.spin || null,
+    });
+  }
+
+  // ---- Structures: enterable caves, houses & enemy bases ----
+  // All face the arena centre (door on local +z toward centre) so you can walk in.
+  let structureEggs = 0;
+  const colorTier = Math.min(3, state.worldIndex);
+  const enemyHp = Math.min(4, 1 + state.worldIndex + (state.levelIndex >= 2 ? 1 : 0));
+  const enemySpeed = 4.2 + state.worldIndex * 0.5;
+
+  // Register an enterable building and drop `eggsInside` eggs around its interior.
+  function placeBuilding(group, x, z, eggsInside) {
+    const yaw = Math.atan2(-x, -z);            // local +z points to arena centre
+    group.position.set(x, 0, z); group.rotation.y = yaw;
+    levelGroup.add(group);
+    buildings.push({
+      group, x, z, rWall: group.userData.rWall, doorHalf: group.userData.doorHalf,
+      doorAngle: Math.atan2(-z, -x),           // world angle of the doorway
+      roof: group.userData.roof, core: group.userData.core || null,
+    });
+    for (let k = 0; k < eggsInside; k++) {
+      const a = (k / Math.max(1, eggsInside)) * Math.PI * 2 + rng() * 0.6;
+      const rr = eggsInside > 1 ? group.userData.rWall * 0.45 : 0;
+      addEgg(x + Math.cos(a) * rr, z + Math.sin(a) * rr, rng() * Math.PI * 2);
+      structureEggs++;
+    }
+  }
+
+  // Caves — 3 eggs inside
+  const caveCount = 1 + Math.min(1, state.levelIndex);
+  for (let i = 0; i < caveCount; i++) {
+    const p = placeNoOverlap(rng, 3.6, taken);
+    if (p) placeBuilding(buildCave(world), p.x, p.z, 3);
+  }
+
+  // Houses — most have eggs inside
+  const houseCount = 2 + (state.worldIndex > 1 ? 1 : 0);
+  for (let i = 0; i < houseCount; i++) {
+    const p = placeNoOverlap(rng, 3.1, taken);
+    if (p) placeBuilding(buildHouse(world), p.x, p.z, rng() < 0.7 ? 2 : 0);
+  }
+
+  // Enemy bases — guarded egg inside + tiered roaming foes (none on the very first level)
+  const baseCount = Math.min(3, Math.max(0, state.levelIndex + state.worldIndex - 1));
+  for (let i = 0; i < baseCount; i++) {
+    const p = placeNoOverlap(rng, 6.0, taken);   // bigger radius — leaves room for its ring of roaming foes too
+    if (!p) continue;
+    placeBuilding(buildEnemyBase(world), p.x, p.z, 2);   // 2 eggs guarded inside the fortress
+    const pool = WORLD_KINDS[Math.min(WORLD_KINDS.length - 1, state.worldIndex)];
+    const eCount = 2 + (state.levelIndex > 1 ? 1 : 0) + (state.worldIndex >= 2 ? 1 : 0);
+    for (let k = 0; k < eCount; k++) {
+      const a = (k / eCount) * Math.PI * 2 + rng();
+      const ex = p.x + Math.cos(a) * 5.6, ez = p.z + Math.sin(a) * 5.6;
+      const kind = pool[Math.floor(rng() * pool.length)];
+      const K = ENEMY_KINDS[kind];
+      const hp = Math.min(8, Math.max(1, Math.round(enemyHp * K.hpMul)));
+      const e = buildEnemy(world, colorTier, kind);
+      e.position.set(ex, 0, ez);
+      levelGroup.add(e);
+      enemies.push({
+        group: e, x: ex, z: ez, baseX: p.x, baseZ: p.z, phase: rng() * Math.PI * 2,
+        alive: true, respawn: 0, hp, maxHp: hp, speed: K.speed + state.worldIndex * 0.3,
+        lastHit: -1, frozen: 0, kind, behavior: K.behavior, knockResist: K.knockResist || 0,
+        chargeTimer: 1 + rng() * 2, dashTime: 0, dashDirX: 0, dashDirZ: 0, shootTimer: 1 + rng() * 1.5,
+      });
+    }
+  }
+
+  // ---- Power-ups to find: the four staples, plus new weapons unlocked in later worlds ----
+  const PU = ['sword', 'bow', 'icicle'];
+  if (state.worldIndex >= 3) PU.push('hammer');     // 🔨 from Volcano onward
+  if (state.worldIndex >= 4) PU.push('flame');      // 🔥 from Swamp onward
+  for (let i = 0; i < PU.length; i++) {
+    const p = placeNoOverlap(rng, 1.2, taken);
+    if (p) addPowerup(p.x, p.z, PU[i], rng() * Math.PI * 2);
+  }
+
+  // ---- Hidden treasure chests: 2 per level, tucked away; potion or bonus eggs ----
+  const chestCount = 2;
+  for (let i = 0; i < chestCount; i++) {
+    const p = placeNoOverlap(rng, 1.1, taken);
+    if (!p) continue;
+    // first chest leans toward a potion, second toward eggs — but keep it random
+    const loot = rng() < (i === 0 ? 0.6 : 0.4) ? 'potion' : 'egg';
+    addChest(p.x, p.z, loot);
+  }
+
+  // ---- Sky area: climb the ladder to a whole raised platform of eggs ----
+  const noPlatform = (state.worldIndex === 0 && state.levelIndex === 3);   // 1-4 has no sky platform
+  if (!noPlatform) {
+    // platform sits overhead, so it only needs a clear-ish centre (fallback guarantees one)
+    const p = placeNoOverlap(rng, 3.0, taken) || { x: (rng() < 0.5 ? -1 : 1) * (ARENA - 12), z: (rng() - 0.5) * 16 };
+    const inward = ARENA - 8;                       // keep the whole deck inside the play area
+    p.x = Math.max(-inward, Math.min(inward, p.x));
+    p.z = Math.max(-inward, Math.min(inward, p.z));
+    const H = 5 + rng() * 1.5, R = 5;
+    addSkyArea(world, p.x, p.z, R, H);
+    const n = 3 + state.levelIndex;                    // more eggs up top in later levels
+    for (let k = 0; k < n; k++) {
+      const a = (k / n) * Math.PI * 2;
+      addEgg(p.x + Math.cos(a) * R * 0.5, p.z + Math.sin(a) * R * 0.5, rng() * Math.PI * 2, H);
+      structureEggs++;
+    }
+  }
+
+  // ---- Field eggs: fill up to the level target ----
+  const eggTarget = world.baseFish + state.levelIndex * 2;
+  const fieldEggs = Math.max(2, eggTarget - structureEggs);
+  for (let i = 0; i < fieldEggs; i++) {
+    const p = placeNoOverlap(rng, 0.7, taken);
+    if (!p) continue;
+    addEgg(p.x, p.z, rng() * Math.PI * 2);
+  }
+  state.fishTotal = fishes.length;
+  state.fishGot = 0;
+
+  // Portal (far corner-ish)
+  portal = buildPortal(world);
+  const pp = placeNoOverlap(rng, 1.8, taken) || { x: ARENA - 5, z: ARENA - 5 };
+  // push portal toward an edge for a "goal" feel
+  portal.position.set(pp.x * 1.0, 0, pp.z * 1.0);
+  portal.userData.x = portal.position.x; portal.userData.z = portal.position.z;
+  levelGroup.add(portal);
+
+  // Decorations (non-colliding flavor)
+  const decoCount = 18;
+  for (let i = 0; i < decoCount; i++) {
+    // pick a spot that stays clear of buildings (and any other placed object)
+    let x, z, clear = false;
+    for (let t = 0; t < 14 && !clear; t++) {
+      x = (rng() * 2 - 1) * (ARENA - 1);
+      z = (rng() * 2 - 1) * (ARENA - 1);
+      clear = true;
+      for (const b of buildings) { if (Math.hypot(x - b.x, z - b.z) < b.rWall + 2.0) { clear = false; break; } }
+      // keep clear of the whole sky-platform footprint (its eggs sit overhead)
+      if (clear) for (const pf of platforms) { if (Math.hypot(x - pf.x, z - pf.z) < pf.r + 2.0) { clear = false; break; } }
+      if (clear) for (const o of taken) { if (Math.hypot(x - o.x, z - o.z) < (o.r || 0) + 1.4) { clear = false; break; } }
+    }
+    if (!clear) continue;            // couldn't find a clear spot — skip this decoration
+    let d;
+    const ds = world.decoShape || 'mound';
+    if (ds === 'snow') {
+      d = new THREE.Mesh(new THREE.SphereGeometry(0.25 + rng() * 0.3, 6, 6), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 }));
+      d.position.set(x, 0.15, z);
+    } else if (ds === 'mound') {
+      d = new THREE.Mesh(new THREE.SphereGeometry(0.3, 6, 6), new THREE.MeshStandardMaterial({ color: world.groundAccent, roughness: 1 }));
+      d.scale.set(1, 0.4, 1); d.position.set(x, 0.1, z);
+    } else if (ds === 'frond') {
+      d = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.7, 5), new THREE.MeshStandardMaterial({ color: world.decoColor, roughness: 0.9 }));
+      d.position.set(x, 0.35, z);
+    } else if (ds === 'crystal') {
+      d = new THREE.Mesh(new THREE.OctahedronGeometry(0.22 + rng() * 0.22, 0), new THREE.MeshStandardMaterial({ color: world.decoColor, emissive: world.decoColor, emissiveIntensity: 0.5, roughness: 0.2, flatShading: true }));
+      d.scale.y = 1.8; d.position.set(x, 0.4, z);
+    } else { // ember — glowing flecks (volcano / shadow)
+      d = new THREE.Mesh(new THREE.IcosahedronGeometry(0.25 + rng() * 0.25, 0), new THREE.MeshStandardMaterial({ color: 0x1a1410, emissive: world.decoColor || 0x551500, emissiveIntensity: 0.35 }));
+      d.position.set(x, 0.2, z);
+    }
+    decoGroup.add(d);
+  }
+
+  resetPenguin();
+  updateHUD();
+  showHint(`Rescue all ${state.fishTotal} eggs, then carry them into the portal!`);
+}
+
+// --- Tutorial placement helpers (module-scope so the lessons can use them) ---
+function spawnEnemyAt(x, z, hp, speed, kind) {
+  kind = kind || 'grunt';
+  const K = ENEMY_KINDS[kind] || ENEMY_KINDS.grunt;
+  const e = buildEnemy(TUTORIAL_WORLD, 0, kind);
+  e.position.set(x, 0, z);
+  levelGroup.add(e);
+  enemies.push({ group: e, x, z, baseX: x, baseZ: z, phase: 0, alive: true, respawn: 0, hp: hp || 2, maxHp: hp || 2, speed: speed || K.speed, lastHit: -1, frozen: 0, kind, behavior: K.behavior, knockResist: K.knockResist || 0, chargeTimer: 1, dashTime: 0, dashDirX: 0, dashDirZ: 0, shootTimer: 1 });
+}
+function addHazardAt(x, z) {
+  const hz = buildHazard(TUTORIAL_WORLD);
+  hz.position.set(x, 0, z);
+  levelGroup.add(hz);
+  hazards.push({ group: hz, x, z, r: hz.userData.radius || 0.7, moving: false, baseX: x, baseZ: z, phase: 0, glow: hz.userData.glow || null });
+}
+function placeBuildingAt(group, x, z, eggsInside) {
+  const yaw = Math.atan2(-x, -z);
+  group.position.set(x, 0, z); group.rotation.y = yaw;
+  levelGroup.add(group);
+  buildings.push({
+    group, x, z, rWall: group.userData.rWall, doorHalf: group.userData.doorHalf,
+    doorAngle: Math.atan2(-z, -x), roof: group.userData.roof, core: group.userData.core || null,
+  });
+  for (let k = 0; k < eggsInside; k++) {
+    const a = (k / Math.max(1, eggsInside)) * Math.PI * 2;
+    const rr = eggsInside > 1 ? group.userData.rWall * 0.45 : 0;
+    addEgg(x + Math.cos(a) * rr, z + Math.sin(a) * rr, k);
+  }
+}
+
+// One focused lesson per mechanic / power-up.
+const TUTORIALS = [
+  {
+    name: 'Move & Collect',
+    hint: 'Move with WASD or the arrow keys. Gather the glowing eggs, then waddle into the portal! 🥚',
+    setup() { addEgg(-6, 2, 0); addEgg(6, 1, 1); addEgg(0, 7, 2); },
+  },
+  {
+    name: 'Jump & Hover',
+    hint: 'Press SPACE to hop over hazards — then tap SPACE again in mid-air to flutter and HOVER across! 🪽',
+    setup() {
+      for (let i = -2; i <= 2; i++) addHazardAt(i * 2.3, 5);   // a hedge of cacti to clear
+      addEgg(-3, 11, 0); addEgg(3, 11, 1); addEgg(0, 14, 2);
+    },
+  },
+  {
+    name: 'Belly-Slide',
+    hint: 'Press Z or the ↓ key to belly-slide — dash straight through enemies to smash them (you shrug off hazards mid-slide)!',
+    setup() {
+      spawnEnemyAt(-3, 8, 1, 2.0); spawnEnemyAt(0, 9, 1, 2.0); spawnEnemyAt(3, 8, 1, 2.0);
+      addEgg(0, 13, 0);
+    },
+  },
+  {
+    name: 'Sword',
+    hint: 'Grab the 🗡️ Sword! Tap F/X to swing (every 3rd hit is a combo finisher) — or HOLD it & release for a 360° spin slash!',
+    setup() {
+      addPowerup(0, 4, 'sword', 0);
+      spawnEnemyAt(-2, 10, 2, 2.4); spawnEnemyAt(2, 10, 2, 2.4);
+      addEgg(0, 13, 0);
+    },
+  },
+  {
+    name: 'Bow',
+    hint: 'Grab the 🏹 Bow! Tap F/X to fire piercing arrows from a distance — HOLD it for a 3-arrow triple shot!',
+    setup() {
+      addPowerup(0, 3, 'bow', 0);
+      spawnEnemyAt(-3, 13, 2, 1.8); spawnEnemyAt(0, 15, 2, 1.8); spawnEnemyAt(3, 13, 2, 1.8);
+      addEgg(0, 17, 0);
+    },
+  },
+  {
+    name: 'Icicle Staff',
+    hint: 'Grab the ❄️ Icicle Staff! Tap F/X for homing freeze shots — HOLD it to release a Frost Nova that freezes everything nearby!',
+    setup() {
+      addPowerup(0, 3, 'icicle', 0);
+      spawnEnemyAt(-2, 11, 2, 2.2); spawnEnemyAt(2, 11, 2, 2.2); spawnEnemyAt(0, 13, 2, 2.2);
+      addEgg(0, 15, 0);
+    },
+  },
+  {
+    name: 'Buildings',
+    hint: 'Eggs hide inside buildings! Walk through the doorway — the roof lifts so you can see — and grab the eggs within. 🏠',
+    setup() {
+      placeBuildingAt(buildCave(TUTORIAL_WORLD), 0, 9, 3);
+      placeBuildingAt(buildHouse(TUTORIAL_WORLD), -9, 4, 2);
+    },
+  },
+];
+const TUT_LEVELS = TUTORIALS.length;
+
+// Build the current tutorial lesson.
+function buildTutorialLevel() {
+  clearLevel();
+  const world = TUTORIAL_WORLD;
+  setupArena(world, 7 + state.tutIndex * 13);
+  resetPenguin();
+  state.bossLevel = false;
+
+  // goal portal to the south (behind the spawn)
+  portal = buildPortal(world);
+  portal.position.set(0, 0, -13);
+  portal.userData.x = 0; portal.userData.z = -13;
+  levelGroup.add(portal);
+
+  const lesson = TUTORIALS[state.tutIndex];
+  lesson.setup();
+
+  state.fishTotal = fishes.length;
+  state.fishGot = 0;
+  updateHUD();
+  showHint(lesson.hint);
+}
+
+// ============================================================
+//  INPUT
+// ============================================================
+const keys = {};
+window.addEventListener('keydown', (e) => {
+  keys[e.code] = true;
+  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+  if (e.code === 'KeyP' && state.running) togglePause();
+  // Shift presses the visible "continue / advance" button on end screens
+  if ((e.code === 'ShiftLeft' || e.code === 'ShiftRight') && !state.running) {
+    for (const [ov, btn] of [['levelComplete', 'nextBtn'], ['worldComplete', 'nextWorldBtn'], ['gameOver', 'retryBtn'], ['winScreen', 'playAgainBtn']]) {
+      if (!document.getElementById(ov).classList.contains('hidden')) { document.getElementById(btn).click(); e.preventDefault(); break; }
+    }
+  }
+});
+window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+function togglePause() {
+  state.paused = !state.paused;
+  showHint(state.paused ? '⏸ Paused — press P to resume' : '');
+}
+
+// ============================================================
+//  GAME LOGIC UPDATE
+// ============================================================
+const SPEED = 11;
+const ACCEL = 60;
+const FRICTION = 8;
+const SLIDE_SPEED = 22;
+const SLIDE_DURATION = 0.55;
+const SLIDE_COOLDOWN = 0.8;
+const clock = new THREE.Clock();
+
+function update(dt) {
+  if (!state.running || state.paused) return;
+
+  // --- Movement input ---
+  let ix = 0, iz = 0;
+  // (Left arrow = attack, Down arrow = slide — so they're not movement keys)
+  if (keys['KeyW'] || keys['ArrowUp']) iz -= 1;
+  if (keys['KeyS']) iz += 1;
+  if (keys['KeyA']) ix -= 1;
+  if (keys['KeyD'] || keys['ArrowRight']) ix += 1;
+  const inLen = Math.hypot(ix, iz);
+  if (inLen > 0) { ix /= inLen; iz /= inLen; }
+
+  const v = state.velocity;
+
+  // --- Slide attack ---
+  if (state.slideCd > 0) state.slideCd -= dt;
+  const slidePressed = keys['KeyZ'] || keys['ArrowDown'];
+  if (slidePressed && !state.sliding && state.slideCd <= 0 && !state.jumping) {
+    state.sliding = true; state.slideTime = SLIDE_DURATION;
+    v.x = Math.sin(state.facing) * SLIDE_SPEED;
+    v.z = Math.cos(state.facing) * SLIDE_SPEED;
+  }
+
+  if (state.sliding) {
+    // committed dash with gentle steering; decays to the cooldown
+    v.x += ix * ACCEL * 0.3 * dt;
+    v.z += iz * ACCEL * 0.3 * dt;
+    const sp2 = Math.hypot(v.x, v.z);
+    if (sp2 > SLIDE_SPEED) { v.x = v.x / sp2 * SLIDE_SPEED; v.z = v.z / sp2 * SLIDE_SPEED; }
+    state.slideTime -= dt;
+    if (state.slideTime <= 0) { state.sliding = false; state.slideCd = SLIDE_COOLDOWN; }
+  } else {
+    v.x += ix * ACCEL * dt;
+    v.z += iz * ACCEL * dt;
+    const sp = Math.hypot(v.x, v.z);
+    if (sp > SPEED) { v.x = v.x / sp * SPEED; v.z = v.z / sp * SPEED; }
+    if (inLen === 0) {
+      const f = Math.max(0, 1 - FRICTION * dt);
+      v.x *= f; v.z *= f;
+    }
+  }
+
+  // --- Action key: attack (weapons) OR block/parry (shield) ---
+  if (state.attackCd > 0) state.attackCd -= dt;
+  if (state.swing > 0) state.swing -= dt;
+  if (state.punch > 0) state.punch -= dt;
+  if (state.comboTimer > 0) state.comboTimer -= dt;
+  if (state.parryTimer > 0) state.parryTimer -= dt;
+  const fNow = (!!keys['KeyF'] || !!keys['KeyX'] || !!keys['ArrowLeft']);
+  if (state.weapon === 'shield') {
+    if (fNow && !state.fHeld) state.parryTimer = 0.5;    // fresh press opens a parry window (generous enough to catch boss attacks)
+    state.blocking = fNow;                               // hold = block
+    state.charging = false; state.charge = 0;
+    if (state.blocking) { state.velocity.x *= 0.5; state.velocity.z *= 0.5; }  // slow while guarding
+  } else if (state.weapon) {
+    state.blocking = false;
+    if (fNow) { state.charging = true; state.charge = Math.min(1, state.charge + dt / CHARGE_TIME); }
+    if (!fNow && state.fHeld) {                          // released
+      if (state.charge >= CHARGE_FULL) doChargedAttack();
+      else if (state.attackCd <= 0) doAttack();
+      state.charge = 0; state.charging = false;
+    }
+  } else {
+    // no weapon equipped: a quick bare-handed punch on each press
+    state.blocking = false; state.charging = false; state.charge = 0;
+    if (fNow && !state.fHeld && state.attackCd <= 0) doPunch();
+  }
+  state.fHeld = fNow;
+
+  // proposed new position
+  let nx = state.pos.x + v.x * dt;
+  let nz = state.pos.z + v.z * dt;
+
+  // boundary
+  const lim = ARENA - 1.4;
+  if (nx > lim) { nx = lim; v.x = 0; }
+  if (nx < -lim) { nx = -lim; v.x = 0; }
+  if (nz > lim) { nz = lim; v.z = 0; }
+  if (nz < -lim) { nz = -lim; v.z = 0; }
+
+  // obstacle collision (circle push-out)
+  const pr = 0.7;
+  for (const o of obstacles) {
+    const dx = nx - o.x, dz = nz - o.z;
+    const dist = Math.hypot(dx, dz);
+    const min = o.r + pr;
+    if (dist < min && dist > 0.0001) {
+      const push = (min - dist);
+      nx += (dx / dist) * push;
+      nz += (dz / dist) * push;
+      // kill velocity into the obstacle
+      const nlen = Math.hypot(dx, dz);
+      const ndotv = (v.x * dx + v.z * dz) / (nlen || 1);
+      if (ndotv < 0) { v.x -= ndotv * dx / nlen; v.z -= ndotv * dz / nlen; }
+    }
+  }
+
+  // building collision: circular wall with a walk-through doorway
+  for (const b of buildings) {
+    const bdx = nx - b.x, bdz = nz - b.z;
+    const bdist = Math.hypot(bdx, bdz) || 1e-4;
+    let da = Math.abs(Math.atan2(bdz, bdx) - b.doorAngle);
+    if (da > Math.PI) da = Math.PI * 2 - da;
+    if (da < b.doorHalf) continue;             // walking through the doorway
+    if (Math.abs(bdist - b.rWall) < pr) {
+      const targetR = (bdist >= b.rWall) ? b.rWall + pr : b.rWall - pr;
+      nx = b.x + (bdx / bdist) * targetR;
+      nz = b.z + (bdz / bdist) * targetR;
+      const ndotv = (v.x * bdx + v.z * bdz) / bdist;  // cancel radial velocity
+      v.x -= ndotv * bdx / bdist; v.z -= ndotv * bdz / bdist;
+    }
+  }
+
+  state.pos.x = nx; state.pos.z = nz;
+
+  // ground level under the penguin (0, or a platform top you're standing on/above)
+  let floorY = 0;
+  for (const pf of platforms) {
+    if (Math.hypot(state.pos.x - pf.x, state.pos.z - pf.z) < pf.r && state.pos.y >= pf.top - 0.8) floorY = Math.max(floorY, pf.top);
+  }
+
+  // --- Ladder: stand in it to auto-climb up to the platform ---
+  let onLadder = null;
+  for (const L of ladders) { if (Math.hypot(state.pos.x - L.x, state.pos.z - L.z) < L.r) { onLadder = L; break; } }
+  if (onLadder) {
+    state.jumping = false; state.vy = 0; state.hover = 0; state.hoverUsed = false;
+    state.pos.y = Math.min(onLadder.top, state.pos.y + 9 * dt);   // ride up
+  }
+
+  // --- Jump + flutter-hover (suspended while on a ladder) ---
+  const spaceNow = !!keys['Space'];
+  if (spaceNow && !state.spaceHeld && !onLadder) {        // fresh tap (edge)
+    if (!state.jumping && state.pos.y <= floorY + 0.05) {
+      state.jumping = true; state.vy = 11; state.hoverUsed = false;  // jump off the floor/platform
+    } else if (state.jumping && !state.hoverUsed) {
+      state.hover = 0.7; state.hoverUsed = true;   // ONE flutter-hover per jump
+      if (state.pos.y < 9) state.vy = Math.max(state.vy, 2.5);
+    }
+  }
+  state.spaceHeld = spaceNow;
+  if (!onLadder && state.pos.y > floorY + 0.05 && !state.jumping) { state.jumping = true; state.vy = 0; }  // walked off a ledge → fall
+  if (state.jumping && !onLadder) {
+    const g = state.hover > 0 ? 5 : 26;      // reduced gravity while hovering
+    if (state.hover > 0) { state.hover -= dt; if (state.vy < -2.2) state.vy = -2.2; } // gentle float-down
+    state.vy -= g * dt;
+    state.pos.y += state.vy * dt;
+    if (state.pos.y <= floorY) { state.pos.y = floorY; state.jumping = false; state.vy = 0; state.hover = 0; state.hoverUsed = false; }
+  } else if (!onLadder) {
+    state.pos.y = floorY;   // resting on the floor/platform
+  }
+
+  // --- Facing ---
+  const moveSpeed = Math.hypot(v.x, v.z);
+  if (moveSpeed > 0.5) {
+    state.facing = Math.atan2(v.x, v.z);
+  }
+
+  // --- Apply to mesh ---
+  penguin.position.set(state.pos.x, state.pos.y, state.pos.z);
+  penguin.rotation.y = state.facing;
+
+  // egg trail — record Pip's path and string the collected eggs along it
+  if (trailEggs.length) {
+    const hist = state.trailHist;
+    if (!hist.length || Math.hypot(state.pos.x - hist[0].x, state.pos.z - hist[0].z) > 0.5) {
+      hist.unshift({ x: state.pos.x, y: state.pos.y, z: state.pos.z });
+      if (hist.length > 90) hist.pop();
+    }
+    for (let i = 0; i < trailEggs.length; i++) {
+      const s = hist[Math.min(i + 1, hist.length - 1)] || state.pos;
+      const e = trailEggs[i];
+      e.position.set(s.x, s.y + 0.35, s.z);
+      e.rotation.y += dt * 2.5;
+    }
+  }
+
+  // waddle animation
+  if (moveSpeed > 0.5 && !state.jumping && !state.sliding) {
+    state.walkPhase += dt * moveSpeed * 1.6;
+    const sway = Math.sin(state.walkPhase) * 0.12;
+    penguin.rotation.z = sway;
+    const ud = penguin.userData;
+    ud.lFoot.position.z = 0.18 + Math.sin(state.walkPhase) * 0.18;
+    ud.rFoot.position.z = 0.18 - Math.sin(state.walkPhase) * 0.18;
+    ud.lFlip.rotation.x = Math.sin(state.walkPhase) * 0.5;
+    ud.rFlip.rotation.x = -Math.sin(state.walkPhase) * 0.5;
+  } else {
+    penguin.rotation.z *= 0.85;
+    const ud = penguin.userData;
+    ud.lFoot.position.z *= 0.9; ud.rFoot.position.z *= 0.9;
+    ud.lFoot.position.z += 0.18 * 0.1; ud.rFoot.position.z += 0.18 * 0.1;
+  }
+  if (state.jumping) {
+    if (state.hover > 0) {                    // flap flippers while hovering
+      const flap = Math.sin(clock.elapsedTime * 32) * 0.9;
+      penguin.userData.lFlip.rotation.x = flap;
+      penguin.userData.rFlip.rotation.x = flap;
+    } else {
+      penguin.userData.lFlip.rotation.x = -0.8;
+      penguin.userData.rFlip.rotation.x = -0.8;
+    }
+  }
+
+  // slide pose: pitch forward onto belly, flippers swept back
+  if (state.sliding) {
+    penguin.rotation.x = -1.15;
+    penguin.rotation.z = 0;
+    penguin.userData.lFlip.rotation.x = -1.3;
+    penguin.userData.rFlip.rotation.x = -1.3;
+  } else {
+    penguin.rotation.x *= 0.8;
+  }
+
+  // bare-handed punch: right flipper thrusts straight forward, then settles
+  if (state.punch > 0) {
+    const pp = Math.sin((1 - state.punch / 0.22) * Math.PI);   // 0 → 1 → 0 over the jab
+    const rf = penguin.userData.rFlip;
+    rf.rotation.x = -1.55 * pp;             // swing the flipper from vertical to point forward
+    rf.rotation.z = -0.35 + 0.35 * pp;      // straighten it in line with the punch
+    rf.position.z = 0.95 * pp;              // drive the fist out in front of Pip
+    rf.position.x = 0.66 - 0.34 * pp;       // bring it toward center as it extends
+    rf.position.y = 0.95 - 0.15 * pp;       // drop to shoulder height for a level jab
+  }
+
+  // weapon swing + charge animation
+  const held = penguin.userData.held;
+  if (state.swing > 0 && (state.weapon === 'sword' || state.weapon === 'hammer')) {
+    const dur = state.swingDur || WEAPONS[state.weapon].cd;
+    const p = 1 - Math.max(0, state.swing) / dur;          // 0 → 1 across the swing
+    if (state.spin) {
+      // 360° spin slash: blade held flat and whips a full turn around the penguin
+      held.rotation.y = p * Math.PI * 2;
+      held.rotation.z = -1.25;
+      held.rotation.x = 0;
+    } else {
+      // clean diagonal slash: weighted wind-up → fast sweep → soft follow-through
+      const ease = p * p * (3 - 2 * p);                     // smoothstep
+      held.rotation.z = 0.7 - 2.9 * ease;                  // raised back → followed through
+      held.rotation.x = -Math.sin(p * Math.PI) * 0.55;     // chop forward, then settle
+      held.rotation.y = 0;
+    }
+  } else {
+    held.rotation.z *= 0.8;
+    held.rotation.x *= 0.8;
+  }
+  if (state.weapon) {
+    held.scale.setScalar(0.85 + state.charge * 0.45);   // weapon swells as it charges
+    if (state.charging) held.rotation.y = clock.elapsedTime * 6;
+    else if (!(state.swing > 0 && state.spin)) held.rotation.y = 0;   // don't stomp the spin slash
+    document.getElementById('chargeFill').style.width = (state.charge * 100) + '%';
+  }
+  if (state.weapon === 'shield') {                       // raise shield forward when guarding
+    held.position.z = state.blocking ? 1.05 : 0.45;
+    held.position.x = state.blocking ? 0.35 : 0.7;
+    held.rotation.y = 0;
+  } else {
+    held.position.z = 0.15; held.position.x = 0.7;
+  }
+
+  if (state.invuln > 0) {
+    state.invuln -= dt;
+    penguin.visible = Math.floor(state.invuln * 12) % 2 === 0;
+  } else penguin.visible = true;
+
+  // --- Fish collection ---
+  for (const f of fishes) {
+    if (f.collected) continue;
+    f.bob += dt * 3;
+    f.inner.position.y = Math.sin(f.bob) * 0.18;
+    f.inner.rotation.y += dt * 2;
+    if (f.caged && !state.hasKey) {       // locked in the castle cage until you grab the key
+      if (Math.hypot(state.pos.x - f.x, state.pos.z - f.z) < 2.2) showHint('🔒 The cage is locked — beat the boss and grab its 🗝️ key!');
+      continue;
+    }
+    const d = Math.hypot(state.pos.x - f.x, state.pos.z - f.z);
+    if (d < 1.3 && Math.abs(state.pos.y - (f.ey || 0)) < 1.8) {   // must be at the egg's height
+      f.collected = true;
+      f.group.visible = false;
+      state.fishGot++;
+      state.totalCollected++;
+      state.coins++; saveProgress();   // eggs double as shop currency
+      setCarryStack(state.fishGot);
+      updateHUD();
+      if (state.fishGot >= state.fishTotal) {
+        showHint('All eggs rescued! Head into the portal! ✨');
+        if (portal) portal.userData.innerMat.opacity = 0.9;
+      }
+    }
+  }
+
+  // --- Power-up pickups ---
+  for (const pu of powerups) {
+    if (pu.taken) continue;
+    pu.bob += dt * 3;
+    pu.inner.position.y = Math.sin(pu.bob) * 0.18;
+    pu.inner.rotation.y += dt * 2;
+    if (Math.hypot(state.pos.x - pu.x, state.pos.z - pu.z) < 1.3) {
+      if (state.playground) {
+        // practice: power-ups stay so you can freely switch weapons
+        if (state.weapon !== pu.type) { armWeapon(pu.type); showHint(`Equipped ${WEAPONS[pu.type].label}`); }
+      } else {
+        pu.taken = true; pu.group.visible = false;
+        armWeapon(pu.type);
+        showHint(`Got the ${WEAPONS[pu.type].label}! Press F to attack`);
+      }
+    }
+  }
+
+  // --- Treasure chests: open on touch, then swing the lid up ---
+  for (const ch of chests) {
+    if (!ch.opened) {
+      if (Math.hypot(state.pos.x - ch.x, state.pos.z - ch.z) < 1.5) {
+        ch.opened = true;
+        openChest(ch);
+      }
+    } else if (ch.openT < 1) {
+      ch.openT = Math.min(1, ch.openT + dt * 5);
+      ch.lid.rotation.x = -1.35 * ch.openT;   // lid swings open about its rear hinge
+    }
+  }
+
+  // --- Castle key: grab the boss's dropped key to unlock the egg cage ---
+  if (keyDrop && !keyDrop.taken) {
+    keyDrop.bob += dt * 3;
+    keyDrop.inner.position.y = Math.sin(keyDrop.bob) * 0.2;
+    keyDrop.inner.rotation.y += dt * 2.5;
+    if (Math.hypot(state.pos.x - keyDrop.x, state.pos.z - keyDrop.z) < 1.4) {
+      keyDrop.taken = true; keyDrop.group.visible = false;
+      state.hasKey = true;
+      spawnRing(keyDrop.x, keyDrop.z, 0xffd24d, 3.2);
+      if (castleCage) castleCage.visible = false;   // the cage bars lift away
+      showHint('🗝️ Cage unlocked! Free the caged eggs, then step into the portal!');
+    }
+  }
+
+  // --- Hazards (some boss-dropped ones have a lifetime) ---
+  for (let hi = hazards.length - 1; hi >= 0; hi--) {
+    const h = hazards[hi];
+    if (h.life !== undefined) {
+      h.life -= dt;
+      if (h.life <= 0) { levelGroup.remove(h.group); hazards.splice(hi, 1); continue; }
+    }
+    if (h.moving) {
+      h.phase += dt * 1.2;
+      h.x = h.baseX + Math.sin(h.phase) * 4;
+      h.z = h.baseZ + Math.cos(h.phase * 0.8) * 3;
+      h.group.position.set(h.x, 0, h.z);
+      if (h.spin) h.group.rotation.y += dt * 9;            // sawblade whirls as it roams
+      else h.group.rotation.y = Math.sin(h.phase) * 0.5;
+    }
+    if (h.glow) { h.glow.emissiveIntensity = 0.7 + Math.sin(clock.elapsedTime * 4 + h.phase) * 0.3; }
+    if (state.invuln <= 0 && !state.sliding) {
+      const d = Math.hypot(state.pos.x - h.x, state.pos.z - h.z);
+      if (d < h.r + 0.5 && state.pos.y < 1.2) {
+        takeDamage();
+      }
+    }
+  }
+
+  // --- Enemies (from enemy bases) ---
+  for (const en of enemies) {
+    if (!en.alive) {
+      if (en.bar) en.bar.group.visible = false;   // hide HP bar while dead
+      if (en.isBoss) continue;            // bosses stay dead
+      en.respawn -= dt;
+      if (en.respawn <= 0) {
+        en.alive = true; en.group.visible = true; en.hp = en.maxHp;
+        en.x = en.baseX; en.z = en.baseZ; en.group.position.set(en.x, 0, en.z);
+      }
+      continue;
+    }
+    const pdx = state.pos.x - en.x, pdz = state.pos.z - en.z;
+    const pdist = Math.hypot(pdx, pdz);
+    const bodyMat = en.group.userData.body.material;
+    if (en.frozen > 0) {
+      // frozen solid — no movement, icy tint
+      en.frozen -= dt;
+      bodyMat.emissive.setHex(0x66ccff); bodyMat.emissiveIntensity = 0.95;
+      en.group.position.set(en.x, 0, en.z);
+    } else {
+      bodyMat.emissive.copy(bodyMat.color); bodyMat.emissiveIntensity = 0.25;
+      en.phase += dt;
+      let bobAmp = 0.14;
+
+      if (en.behavior === 'charge') {
+        // slow stalk, then explosive dashes toward the penguin
+        if (en.dashTime > 0) {
+          en.dashTime -= dt;
+          en.x += en.dashDirX * 16 * dt; en.z += en.dashDirZ * 16 * dt;
+          bobAmp = 0;
+        } else {
+          en.chargeTimer -= dt;
+          let tx, tz, sp;
+          if (pdist < 13) { tx = state.pos.x; tz = state.pos.z; sp = en.speed; }
+          else { tx = en.baseX + Math.cos(en.phase) * 4; tz = en.baseZ + Math.sin(en.phase * 0.9) * 4; sp = 2.0; }
+          const md = Math.hypot(tx - en.x, tz - en.z) || 1;
+          en.x += ((tx - en.x) / md) * sp * dt; en.z += ((tz - en.z) / md) * sp * dt;
+          if (en.chargeTimer <= 0 && pdist < 12) { en.chargeTimer = 2.4; en.dashTime = 0.45; const dl = pdist || 1; en.dashDirX = pdx / dl; en.dashDirZ = pdz / dl; }
+        }
+      } else if (en.behavior === 'caster') {
+        // hover at a preferred distance, strafe, and lob fireballs
+        const pref = 9;
+        let mvx, mvz;
+        if (pdist > pref + 1.5) { mvx = pdx; mvz = pdz; }
+        else if (pdist < pref - 1.5) { mvx = -pdx; mvz = -pdz; }
+        else { mvx = -pdz; mvz = pdx; }                 // strafe perpendicular
+        const ml = Math.hypot(mvx, mvz) || 1;
+        en.x += (mvx / ml) * en.speed * dt; en.z += (mvz / ml) * en.speed * dt;
+        en.shootTimer -= dt;
+        if (en.shootTimer <= 0 && pdist < 16) { en.shootTimer = 1.8; fireEnemyShot(en); }
+        bobAmp = -1;                                     // sentinel: use a steady hover instead
+      } else if (en.behavior === 'boss') {
+        // base movement: steady chase (no dashing)
+        {
+          const md = pdist || 1, mv = en.bossWorld === 2 ? en.speed * 0.5 : en.speed;  // Stone Idol is slow
+          en.x += (pdx / md) * mv * dt; en.z += (pdz / md) * mv * dt;
+        }
+
+        // ---- signature attacks per boss ----
+        // helper: spit one enemy shot along angle `a` at speed `sp`
+        const bShoot = (a, sp) => {
+          const g = buildEnemyShot(); g.position.set(en.x, 1.4, en.z); levelGroup.add(g);
+          enemyShots.push({ group: g, x: en.x, z: en.z, vx: Math.sin(a) * sp, vz: Math.cos(a) * sp, life: 2.6 });
+        };
+        const aimAng = Math.atan2(pdx, pdz);
+        if (en.bossWorld === 0) {
+          // ❄️ Frost Monarch: radial 8-way ICICLE BURST
+          en.burstTimer -= dt;
+          if (en.burstTimer <= 0) {
+            en.burstTimer = 2.6;
+            for (let k = 0; k < 8; k++) {
+              const a = (k / 8) * Math.PI * 2;
+              const g = buildEnemyShot(); g.position.set(en.x, 1.4, en.z); levelGroup.add(g);
+              enemyShots.push({ group: g, x: en.x, z: en.z, vx: Math.sin(a) * 14, vz: Math.cos(a) * 14, life: 2.6 });
+            }
+          }
+        } else if (en.bossWorld === 1) {
+          // 🦂 Scorpion King: pure melee lunges (set above), occasional single spit
+          en.shootTimer -= dt;
+          if (en.shootTimer <= 0) { en.shootTimer = 3.2; fireEnemyShot(en); }
+        } else if (en.bossWorld === 2) {
+          // 🌿 Stone Idol: SUMMONS minions + GROUND-POUND shockwave
+          en.summonTimer -= dt;
+          const minions = enemies.filter(e => e.alive && !e.isBoss).length;
+          if (en.summonTimer <= 0 && minions < 3) {
+            en.summonTimer = 4.5;
+            for (let k = 0; k < 2; k++) {
+              const a = en.phase + k * 3.1;
+              spawnEnemyAt(en.x + Math.cos(a) * 3, en.z + Math.sin(a) * 3, 2, 2.4, 'grunt');
+            }
+            showHint('🌿 The Idol summons minions!');
+          }
+          en.poundTimer -= dt;
+          if (en.poundTimer <= 0 && pdist < 7) {
+            en.poundTimer = 4;
+            spawnRing(en.x, en.z, 0x8fd86a, 6);
+            if (pdist < 5 && state.invuln <= 0 && state.pos.y < 1.2) takeDamage();   // shockwave
+          }
+        } else if (en.bossWorld === 3) {
+          // 🌋 Magma Lord: drops LAVA POOLS + lobs fireballs
+          en.lavaTimer -= dt;
+          if (en.lavaTimer <= 0) {
+            en.lavaTimer = 1.8;
+            const lv = buildHazard(WORLDS[3]);            // a lava pool
+            lv.position.set(en.x, 0, en.z); levelGroup.add(lv);
+            hazards.push({ group: lv, x: en.x, z: en.z, r: lv.userData.radius || 1.2, moving: false, baseX: en.x, baseZ: en.z, phase: 0, glow: lv.userData.glow || null, life: 6 });
+          }
+          en.shootTimer -= dt;
+          if (en.shootTimer <= 0) {
+            en.shootTimer = 2.2;
+            for (const off of [-0.3, 0, 0.3]) bShoot(aimAng + off, 15);
+          }
+        } else if (en.bossWorld === 4) {
+          // 🐍 Bog Hydra: rapid 3-headed toxic spit + drops bog pools
+          en.shootTimer -= dt;
+          if (en.shootTimer <= 0) { en.shootTimer = 1.6; for (const off of [-0.22, 0, 0.22]) bShoot(aimAng + off, 16); }
+          en.lavaTimer -= dt;
+          if (en.lavaTimer <= 0) {
+            en.lavaTimer = 3.2;
+            const bg = buildHazard(WORLDS[4]);            // a toxic bog
+            bg.position.set(en.x, 0, en.z); levelGroup.add(bg);
+            hazards.push({ group: bg, x: en.x, z: en.z, r: bg.userData.radius || 1.2, moving: false, baseX: en.x, baseZ: en.z, phase: 0, glow: bg.userData.glow || null, life: 7 });
+          }
+        } else if (en.bossWorld === 5) {
+          // 💎 Prism Tyrant: 10-way radial shard burst
+          en.burstTimer -= dt;
+          if (en.burstTimer <= 0) {
+            en.burstTimer = 2.4;
+            const spin = en.phase;
+            for (let k = 0; k < 10; k++) bShoot(spin + (k / 10) * Math.PI * 2, 15);
+          }
+        } else if (en.bossWorld === 6) {
+          // 🐉 Storm Drake: fast aimed lightning fan (dashes often via base movement)
+          en.shootTimer -= dt;
+          if (en.shootTimer <= 0) {
+            en.shootTimer = 1.8;
+            for (const off of [-0.4, -0.2, 0, 0.2, 0.4]) bShoot(aimAng + off, 22);
+          }
+        } else if (en.bossWorld === 7) {
+          // 👁️ Shade King: BLINKS toward Pip, fires a dark ring, summons shades
+          en.poundTimer -= dt;
+          if (en.poundTimer <= 0) {                         // blink/teleport closer
+            en.poundTimer = 3.5;
+            const bl = 6;
+            en.x = state.pos.x - (pdx / (pdist || 1)) * bl;
+            en.z = state.pos.z - (pdz / (pdist || 1)) * bl;
+            spawnRing(en.x, en.z, 0x9a4aff, 3);
+          }
+          en.burstTimer -= dt;
+          if (en.burstTimer <= 0) { en.burstTimer = 2.6; for (let k = 0; k < 6; k++) bShoot((k / 6) * Math.PI * 2, 13); }
+          en.summonTimer -= dt;
+          const shades = enemies.filter(e => e.alive && !e.isBoss).length;
+          if (en.summonTimer <= 0 && shades < 3) {
+            en.summonTimer = 5;
+            for (let k = 0; k < 2; k++) { const a = en.phase + k * 3.1; spawnEnemyAt(en.x + Math.cos(a) * 3, en.z + Math.sin(a) * 3, 2, 4.4, 'sprite'); }
+            showHint('👁️ The Shade King summons wraiths!');
+          }
+        } else {
+          // ⚙️ Gear Colossus: ground-pound shockwaves + lobs heavy sawblades
+          en.poundTimer -= dt;
+          if (en.poundTimer <= 0 && pdist < 8) {
+            en.poundTimer = 3.5;
+            spawnRing(en.x, en.z, 0xffc24d, 7);
+            if (pdist < 5.5 && state.invuln <= 0 && state.pos.y < 1.2) takeDamage();   // shockwave
+          }
+          en.shootTimer -= dt;
+          if (en.shootTimer <= 0) { en.shootTimer = 2.6; for (const off of [-0.18, 0.18]) bShoot(aimAng + off, 13); }
+        }
+        bobAmp = 0.1;
+      } else {
+        // grunt / brute: chase when close, otherwise patrol the base
+        let tx, tz, sp;
+        if (pdist < 9) { tx = state.pos.x; tz = state.pos.z; sp = en.speed; }
+        else { tx = en.baseX + Math.cos(en.phase) * 4; tz = en.baseZ + Math.sin(en.phase * 0.9) * 4; sp = 1.8; }
+        const md = Math.hypot(tx - en.x, tz - en.z) || 1;
+        en.x += ((tx - en.x) / md) * sp * dt; en.z += ((tz - en.z) / md) * sp * dt;
+      }
+
+      const elim = ARENA - 1.5;
+      en.x = Math.max(-elim, Math.min(elim, en.x));
+      en.z = Math.max(-elim, Math.min(elim, en.z));
+      const y = bobAmp < 0 ? 0.45 + Math.sin(en.phase * 2) * 0.12 : Math.abs(Math.sin(en.phase * 5)) * bobAmp;
+      en.group.position.set(en.x, y, en.z);
+      en.group.rotation.y = Math.atan2(pdx, pdz);        // face the penguin
+    }
+
+    // keep enemies from walking through solid obstacles & buildings
+    const er = 0.6;
+    for (const o of obstacles) {
+      const dx = en.x - o.x, dz = en.z - o.z, d = Math.hypot(dx, dz), min = o.r + er;
+      if (d < min && d > 1e-4) { en.x = o.x + dx / d * min; en.z = o.z + dz / d * min; }
+    }
+    for (const b of buildings) {
+      const dx = en.x - b.x, dz = en.z - b.z, d = Math.hypot(dx, dz), min = b.rWall + er;
+      if (d < min && d > 1e-4) { en.x = b.x + dx / d * min; en.z = b.z + dz / d * min; }
+    }
+    en.group.position.x = en.x; en.group.position.z = en.z;
+
+    // contact
+    if (pdist < (en.isBoss ? 2.4 : 1.35)) {
+      if (state.sliding) {
+        if (clock.elapsedTime - en.lastHit > 0.3) {  // one hit per slide pass
+          en.lastHit = clock.elapsedTime;
+          const kl = pdist || 1;
+          damageEnemy(en, 1, -pdx / kl, -pdz / kl, false);
+        }
+      } else if (state.invuln <= 0 && state.pos.y < 1.2) {
+        takeDamage();                 // airborne (jumping) = you sail over the enemy
+      }
+    }
+
+    // floating HP bar above the head (bosses use the big top bar instead)
+    if (!en.isBoss) {
+      if (!en.bar) { en.bar = buildHpBar(); levelGroup.add(en.bar.group); }
+      const b = en.bar, sc = en.group.scale.x || 1;
+      b.group.visible = true;
+      b.group.position.set(en.x, (en.group.position.y || 0) + 1.6 * sc + 0.55, en.z);
+      b.group.quaternion.copy(camera.quaternion);     // billboard toward camera
+      const ratio = Math.max(0, en.hp / en.maxHp);
+      b.fillG.scale.x = ratio || 0.0001;   // red shrinks; the black background shows the lost health
+    }
+  }
+
+  // --- Projectiles (arrows pierce, icicles home + freeze) ---
+  for (let i = projectiles.length - 1; i >= 0; i--) {
+    const pj = projectiles[i];
+    pj.life -= dt;
+    if (pj.homing) {                                  // steer toward nearest enemy
+      let best = null, bd = 1e9;
+      for (const en of enemies) { if (!en.alive) continue; const d = Math.hypot(en.x - pj.x, en.z - pj.z); if (d < bd) { bd = d; best = en; } }
+      if (best && bd < 11) {
+        const tx = best.x - pj.x, tz = best.z - pj.z, tl = Math.hypot(tx, tz) || 1;
+        const sp = Math.hypot(pj.vx, pj.vz) || 1;
+        pj.vx += (tx / tl) * sp * 2.2 * dt; pj.vz += (tz / tl) * sp * 2.2 * dt;
+        const nl = Math.hypot(pj.vx, pj.vz) || 1; pj.vx = pj.vx / nl * sp; pj.vz = pj.vz / nl * sp;
+      }
+    }
+    pj.x += pj.vx * dt; pj.z += pj.vz * dt;
+    pj.group.position.set(pj.x, 1.0, pj.z);
+    pj.group.rotation.y = Math.atan2(pj.vx, pj.vz);
+    if (pj.type === 'icicle') pj.group.rotation.z += dt * 12;
+    let remove = false;
+    for (const en of enemies) {
+      if (!en.alive || pj.hit.includes(en)) continue;
+      if (Math.hypot(en.x - pj.x, en.z - pj.z) < 1.25) {
+        const dl = Math.hypot(pj.vx, pj.vz) || 1;
+        damageEnemy(en, pj.dmg, pj.vx / dl, pj.vz / dl, pj.type === 'icicle');
+        pj.hit.push(en);
+        if (pj.pierce > 0) pj.pierce--; else remove = true;
+        break;
+      }
+    }
+    if (remove || pj.life <= 0 || Math.abs(pj.x) > ARENA || Math.abs(pj.z) > ARENA) {
+      levelGroup.remove(pj.group);
+      projectiles.splice(i, 1);
+    }
+  }
+
+  // --- Enemy fireballs (caster) — dodge by sliding, jumping, or just moving ---
+  for (let i = enemyShots.length - 1; i >= 0; i--) {
+    const s = enemyShots[i];
+    s.life -= dt;
+    s.x += s.vx * dt; s.z += s.vz * dt;
+    s.group.position.set(s.x, 1.0, s.z);
+    s.group.rotation.y += dt * 6;
+    let hit = false;
+    if (state.invuln <= 0 && !state.sliding && state.pos.y < 1.2 &&
+        Math.hypot(state.pos.x - s.x, state.pos.z - s.z) < 1.0) { takeDamage(); hit = true; }
+    // fireballs are stopped by solid walls — wizards can't shoot through them
+    let blocked = false;
+    for (const o of obstacles) { if (Math.hypot(s.x - o.x, s.z - o.z) < o.r + 0.25) { blocked = true; break; } }
+    if (!blocked) for (const b of buildings) { if (Math.hypot(s.x - b.x, s.z - b.z) < b.rWall + 0.25) { blocked = true; break; } }
+    if (hit || blocked || s.life <= 0 || Math.abs(s.x) > ARENA || Math.abs(s.z) > ARENA) {
+      levelGroup.remove(s.group);
+      enemyShots.splice(i, 1);
+    }
+  }
+
+  // --- Transient ring effects (spin slash / frost nova) ---
+  for (let i = effects.length - 1; i >= 0; i--) {
+    const ef = effects[i];
+    ef.life -= dt;
+    const t = 1 - ef.life / ef.maxLife;
+    const s = 0.4 + t * ef.maxR;
+    ef.mesh.scale.set(s, s, s);
+    ef.mesh.material.opacity = 0.75 * (1 - t);
+    if (ef.life <= 0) { levelGroup.remove(ef.mesh); effects.splice(i, 1); }
+  }
+
+  // hide roofs while you're inside a building, and pulse enemy-base cores
+  for (const b of buildings) {
+    if (b.roof) {
+      const d = Math.hypot(state.pos.x - b.x, state.pos.z - b.z);
+      b.roof.visible = d > b.rWall + 1.6;
+    }
+    if (b.core) b.core.material.emissiveIntensity = 0.8 + Math.sin(clock.elapsedTime * 5) * 0.4;
+  }
+
+  // --- Portal: boss levels need the boss beaten (+ caged eggs freed in a castle); others need all eggs ---
+  if (portal) {
+    const ready = state.bossLevel ? (state.bossDefeated && state.fishGot >= state.fishTotal) : (state.fishGot >= state.fishTotal);
+    portal.userData.ring.rotation.z += dt * 1.5;
+    portal.userData.inner.material.opacity = ready ? 0.7 + Math.sin(clock.elapsedTime * 5) * 0.25 : 0.25;
+    portal.userData.ringMat.emissiveIntensity = ready ? 1.0 : 0.3;
+    const d = Math.hypot(state.pos.x - portal.userData.x, state.pos.z - portal.userData.z);
+    if (d < 1.6 && ready) {
+      completeLevel();
+    } else if (d < 1.6 && state.bossLevel && !state.bossDefeated) {
+      showHint('Defeat the WORLD BOSS to claim its key!');
+    } else if (d < 1.6 && state.bossLevel && !state.hasKey) {
+      showHint('Grab the 🗝️ key the boss dropped to unlock the cage!');
+    } else if (d < 1.6) {
+      showHint(`Free ${state.fishTotal - state.fishGot} more caged egg(s) first!`);
+    }
+  }
+
+  // keep the boss HP bar in sync
+  if (state.bossActive && state.boss) updateBossBar();
+
+  // playground: respawn the practice boss after it's beaten
+  if (state.playground && state.pgMode === 'boss' && state.pgBossTimer > 0) {
+    state.pgBossTimer -= dt;
+    if (state.pgBossTimer <= 0 && !state.boss) spawnBoss();
+  }
+
+  // --- Camera follow (top-down angled) ---
+  const camTarget = new THREE.Vector3(state.pos.x, 0, state.pos.z);
+  const desired = new THREE.Vector3(state.pos.x, 26, state.pos.z + 16);
+  camera.position.lerp(desired, 1 - Math.pow(0.001, dt));
+  camera.lookAt(camTarget);
+
+  // sun follows penguin so shadows stay crisp
+  sunLight.position.set(state.pos.x + 25, 50, state.pos.z + 18);
+  sunLight.target.position.set(state.pos.x, 0, state.pos.z);
+}
+
+// Player takes a hit — lose a heart, brief invulnerability, knockback.
+function takeDamage() {
+  if (state.invuln > 0) return;
+  // Shield: a fresh press parries (counter-attack); holding just blocks. Either way, no damage.
+  if (state.blocking) {
+    if (state.parryTimer > 0) {
+      doParry();                   // perfect parry: free, so you can keep parrying a boss
+    } else {
+      bigFlash('🛡️'); showHint('🛡️ Blocked!'); state.invuln = 0.35;
+      consumeAmmo(1);              // a plain block spends one of the shield's charges
+    }
+    return;
+  }
+  state.invuln = 1.3;
+  state.hp = Math.max(0, state.hp - 1);
+  updateHearts();
+  const ang = Math.atan2(-state.pos.z, -state.pos.x);   // knock toward centre
+  state.velocity.x += Math.cos(ang) * 6;
+  state.velocity.z += Math.sin(ang) * 6;
+  if (state.hp <= 0) {
+    if (state.playground) { state.hp = state.maxHp; updateHearts(); state.invuln = 1.5; showHint('Practice — hearts refilled! ❤️❤️❤️'); }
+    else gameOver();
+  } else showHint(`Ouch! ${state.hp} ❤️ left`);
+}
+
+// Perfect parry — negate the hit, blast & knock back nearby foes, deflect fireballs.
+function doParry() {
+  state.invuln = 0.7;
+  state.parryTimer = 0;
+  showHint('🛡️ PARRY! Counter-strike!');
+  for (const en of enemies) {
+    if (!en.alive) continue;
+    const dx = en.x - state.pos.x, dz = en.z - state.pos.z, d = Math.hypot(dx, dz) || 1;
+    if (d < 3.8) damageEnemy(en, 1, dx / d, dz / d, false, 8);   // counter-strike hits for the same as a basic sword swing
+  }
+  // reflect nearby fireballs back at the enemies (homing, hurts them now)
+  for (let i = enemyShots.length - 1; i >= 0; i--) {
+    const s = enemyShots[i];
+    if (Math.hypot(state.pos.x - s.x, state.pos.z - s.z) >= 3.8) continue;
+    let best = null, bd = 1e9;
+    for (const en of enemies) { if (!en.alive) continue; const d = Math.hypot(en.x - s.x, en.z - s.z); if (d < bd) { bd = d; best = en; } }
+    let vx, vz;
+    if (best) { const dx = best.x - s.x, dz = best.z - s.z, dl = Math.hypot(dx, dz) || 1; vx = dx / dl; vz = dz / dl; }
+    else { const sl = Math.hypot(s.vx, s.vz) || 1; vx = -s.vx / sl; vz = -s.vz / sl; }   // no target → straight back
+    const sp = 34;
+    projectiles.push({ group: s.group, x: s.x, z: s.z, vx: vx * sp, vz: vz * sp, type: 'fireball', life: 2.2, pierce: 1, hit: [], homing: true });
+    enemyShots.splice(i, 1);   // moved from enemy-owned to player-owned
+  }
+  spawnRing(state.pos.x, state.pos.z, 0xffe066, 3.8);
+}
+
+function gameOver() {
+  state.running = false;
+  state.bossActive = false; state.boss = null;
+  document.getElementById('bossBar').style.visibility = 'hidden';
+  document.getElementById('goScore').textContent = `${state.totalCollected} eggs rescued before falling.`;
+  show('gameOver');
+}
+
+function updateHearts() {
+  const hp = Math.max(0, state.hp);
+  document.getElementById('hearts').textContent = '❤️'.repeat(hp) + '🤍'.repeat(Math.max(0, state.maxHp - hp));
+}
+
+function consumeAmmo(n) {
+  if (state.ammo === Infinity || state.playground) return;   // unlimited in practice
+  state.ammo -= n;
+  if (state.ammo <= 0) { armWeapon(null); showHint('Out of ammo!'); }
+  else updateHUD();
+}
+
+function spawnProjectile(ptype, ang, pierce, homing, dmg) {
+  const fx = Math.sin(ang), fz = Math.cos(ang);
+  const g = buildProjectile(ptype);
+  const x = state.pos.x + fx, z = state.pos.z + fz;
+  g.position.set(x, 1.0, z); g.rotation.y = ang;
+  levelGroup.add(g);
+  projectiles.push({ group: g, x, z, vx: fx * PROJ_SPEED, vz: fz * PROJ_SPEED, type: ptype, life: 1.6, pierce: pierce || 0, hit: [], homing: !!homing, dmg: dmg || 1 });
+}
+
+// Expanding ground ring for spin-slash / frost-nova
+function spawnRing(x, z, color, maxR) {
+  const mesh = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.55, 32),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.75, side: THREE.DoubleSide, depthWrite: false }));
+  mesh.rotation.x = -Math.PI / 2; mesh.position.set(x, 0.12, z);
+  levelGroup.add(mesh);
+  effects.push({ mesh, life: 0.5, maxLife: 0.5, maxR });
+}
+
+// Tap attack (normal).
+// Bare-handed punch (no weapon equipped): short reach, half a basic sword hit's damage.
+function doPunch() {
+  state.attackCd = 0.34;
+  state.punch = 0.22;
+  const fx = Math.sin(state.facing), fz = Math.cos(state.facing);
+  for (const en of enemies) {
+    if (!en.alive) continue;
+    const dx = en.x - state.pos.x, dz = en.z - state.pos.z, d = Math.hypot(dx, dz) || 1;
+    if (d < 2.4 && (dx * fx + dz * fz) / d > 0.35) damageEnemy(en, 0.5, dx / d, dz / d, false, 2.5);  // 0.5 = half a sword tap
+  }
+}
+
+function doAttack() {
+  const type = state.weapon;
+  if (!type) return;
+  state.attackCd = WEAPONS[type].cd;
+  const fx = Math.sin(state.facing), fz = Math.cos(state.facing);
+  if (type === 'sword') {
+    state.swing = WEAPONS.sword.cd; state.swingDur = state.swing; state.spin = false;
+    state.combo = state.comboTimer > 0 ? (state.combo + 1) % 3 : 0;
+    state.comboTimer = 0.9;
+    const heavy = state.combo === 2;             // every 3rd swing is a heavy finisher
+    const dmg = heavy ? 2 : 1, reach = heavy ? 4.2 : 3.6, arc = heavy ? -0.2 : 0.2;
+    const knock = heavy ? 7 : 4.5;               // sword sends foes flying
+    for (const en of enemies) {
+      if (!en.alive) continue;
+      const dx = en.x - state.pos.x, dz = en.z - state.pos.z, d = Math.hypot(dx, dz) || 1;
+      if (d < reach && (dx * fx + dz * fz) / d > arc) damageEnemy(en, dmg, dx / d, dz / d, false, knock);
+    }
+    if (heavy) { spawnRing(state.pos.x, state.pos.z, 0xffe066, 4.2); showHint('🗡️ Combo finisher!'); }
+    consumeAmmo(1);
+  } else if (type === 'hammer') {
+    // heavy wide swing: bigger reach + arc, 2 damage, huge knockback
+    state.swing = WEAPONS.hammer.cd; state.swingDur = state.swing; state.spin = false;
+    for (const en of enemies) {
+      if (!en.alive) continue;
+      const dx = en.x - state.pos.x, dz = en.z - state.pos.z, d = Math.hypot(dx, dz) || 1;
+      if (d < 4.0 && (dx * fx + dz * fz) / d > -0.1) damageEnemy(en, 2, dx / d, dz / d, false, 8);
+    }
+    consumeAmmo(1);
+  } else if (type === 'bow') {
+    spawnProjectile('arrow', state.facing, 1, false);   // arrows pierce 1 enemy
+    consumeAmmo(1);
+  } else if (type === 'flame') {
+    spawnProjectile('flame', state.facing, 2, false, 2);   // fire bolt pierces + burns
+    consumeAmmo(1);
+  } else {
+    spawnProjectile('icicle', state.facing, 0, true);   // icicles home + freeze
+    consumeAmmo(1);
+  }
+}
+
+// Charged special (hold F, release).
+function doChargedAttack() {
+  const type = state.weapon;
+  if (!type) return;
+  state.attackCd = WEAPONS[type].cd * 1.3;
+  if (type === 'sword') {
+    state.swing = WEAPONS.sword.cd * 1.5; state.swingDur = state.swing; state.spin = true;
+    for (const en of enemies) {
+      if (!en.alive) continue;
+      const dx = en.x - state.pos.x, dz = en.z - state.pos.z, d = Math.hypot(dx, dz) || 1;
+      if (d < 4.8) damageEnemy(en, 2, dx / d, dz / d, false, 6);   // 360° spin blasts foes outward
+    }
+    spawnRing(state.pos.x, state.pos.z, 0xfff0a0, 5.0);
+    showHint('⚔️ Spin slash!');
+    consumeAmmo(1);
+  } else if (type === 'hammer') {
+    if (state.ammo !== Infinity && state.ammo < 2) { doAttack(); return; }
+    // Ground slam: a big shockwave that smashes everything around Pip outward
+    state.swing = WEAPONS.hammer.cd * 1.4; state.swingDur = state.swing; state.spin = false;
+    for (const en of enemies) {
+      if (!en.alive) continue;
+      const dx = en.x - state.pos.x, dz = en.z - state.pos.z, d = Math.hypot(dx, dz) || 1;
+      if (d < 5.5) damageEnemy(en, 3, dx / d, dz / d, false, 11);
+    }
+    spawnRing(state.pos.x, state.pos.z, 0xffc24d, 6.0);
+    consumeAmmo(2);
+    showHint('🔨 Ground slam!');
+  } else if (type === 'bow') {
+    if (state.ammo !== Infinity && state.ammo < 2) { doAttack(); return; }
+    // Triple shot: each arrow pierces through every enemy in its lane, so all three reliably deal damage
+    for (const off of [-0.28, 0, 0.28]) spawnProjectile('arrow', state.facing + off, 99, false, 2);
+    consumeAmmo(2);
+    showHint('🏹 Triple shot!');
+  } else if (type === 'flame') {
+    if (state.ammo !== Infinity && state.ammo < 3) { doAttack(); return; }
+    // Flame cone: a fan of 5 piercing fire bolts sprayed forward
+    for (const off of [-0.36, -0.18, 0, 0.18, 0.36]) spawnProjectile('flame', state.facing + off, 99, false, 2);
+    consumeAmmo(3);
+    showHint('🔥 Flame burst!');
+  } else {
+    if (state.ammo !== Infinity && state.ammo < 3) { doAttack(); return; }
+    // Frost burst: 8 icicles fired out in a full 360° ring, each freezes what it hits
+    for (let i = 0; i < 8; i++) spawnProjectile('icicle', (i / 8) * Math.PI * 2, 1, false, 2);
+    spawnRing(state.pos.x, state.pos.z, 0x9fe6ff, 5.4);
+    consumeAmmo(3);
+    showHint('❄️ Frost burst!');
+  }
+}
+
+// ============================================================
+//  PROGRESSION
+// ============================================================
+function completeLevel() {
+  state.running = false;
+
+  // Boss Rally: beat the boss → next gauntlet boss, or back to the rally menu
+  if (state.rally) {
+    bigFlash('🏆');
+    if (state.rallyAll) { nextRally(); return; }
+    state.rally = false;
+    document.getElementById('hud').classList.add('hidden');
+    openBossRally('🏆 ' + BOSS_NAMES[state.worldIndex] + ' defeated! Pick another');
+    return;
+  }
+
+  // Tutorial progression
+  if (state.inTutorial) {
+    bigFlash('✅');
+    state.tutIndex++;
+    if (state.tutIndex < TUT_LEVELS) {
+      document.getElementById('lcText').textContent =
+        `Lesson ${state.tutIndex} of ${TUT_LEVELS} done! Next up: ${TUTORIALS[state.tutIndex].name}.`;
+    } else {
+      state.tutDone = true;
+      document.getElementById('lcText').textContent = "Training complete! Now the real quest begins — World 1: Iceland! 🐧";
+    }
+    show('levelComplete');
+    return;
+  }
+
+  // Real level cleared — mark complete, unlock the next, then open the level menu.
+  state.completed[state.worldIndex + '-' + state.levelIndex] = true;
+  const gi = levelGlobalIndex(state.worldIndex, state.levelIndex);
+  state.maxUnlocked = Math.max(state.maxUnlocked, gi + 1);
+  bigFlash(state.bossLevel ? '🏆' : '🎉');
+
+  if (gi + 1 >= LEVELS.length) {
+    document.getElementById('finalScore').textContent = `${state.totalCollected} eggs rescued across ${WORLDS.length} worlds!`;
+    show('winScreen');
+  } else {
+    const world = WORLDS[state.worldIndex];
+    openLevelSelect(state.bossLevel ? `🏆 World ${state.worldIndex + 1} cleared! Pick your next level` : 'Level cleared! ✨ Pick a level');
+  }
+}
+
+// Populate + show the level-select menu.
+function openLevelSelect(header) {
+  document.getElementById('lsHeader').textContent = header || 'Select a level';
+  const grid = document.getElementById('levelGrid');
+  grid.innerHTML = '';
+  for (let w = 0; w < WORLDS.length; w++) {
+    const world = WORLDS[w];
+    const row = document.createElement('div'); row.className = 'ls-row';
+    const label = document.createElement('div'); label.className = 'ls-world';
+    label.textContent = `World ${w + 1}: ${world.name}`;
+    row.appendChild(label);
+    const btns = document.createElement('div'); btns.className = 'ls-btns';
+    for (let l = 0; l < world.levels; l++) {
+      const gi = levelGlobalIndex(w, l);
+      const unlocked = gi <= state.maxUnlocked || gi === 0;   // first level always available
+      const isBoss = (l === world.levels - 1);
+      const done = state.completed[w + '-' + l];
+      const b = document.createElement('button');
+      b.className = 'ls-btn' + (isBoss ? ' boss' : '') + (unlocked ? '' : ' locked') + (done ? ' cleared' : '');
+      b.textContent = unlocked ? (isBoss ? '👑 Boss' : 'Level ' + (l + 1)) : '🔒 ' + (isBoss ? 'Boss' : 'Level ' + (l + 1));
+      b.disabled = !unlocked;
+      if (unlocked) b.onclick = () => playLevel(w, l);
+      const cw = w, cl = l;
+      b.addEventListener('mouseenter', () => showPreview(cw, cl));
+      b.addEventListener('focus', () => showPreview(cw, cl));
+      btns.appendChild(b);
+    }
+    row.appendChild(btns);
+    grid.appendChild(row);
+  }
+  show('levelSelect');
+  showPreview(0, 0);   // start with World 1, Level 1
+}
+
+// Live mini-map preview shown when hovering a level in the menu.
+function showPreview(w, l) {
+  const world = WORLDS[w];
+  const isBoss = (l === world.levels - 1);
+  document.getElementById('previewTitle').textContent = isBoss ? ('👑 ' + BOSS_NAMES[w]) : (world.name + ' — Level ' + (l + 1));
+  let stats;
+  if (isBoss) {
+    stats = `Boss arena · ${world.name}<br>⚔️ Boss fight · ❤️ 3 hearts<br>👑 ${18 + w * 9} HP · cover pillars + power-ups`;
+  } else {
+    const eggs = world.baseFish + l * 2;
+    const bases = Math.min(3, Math.max(0, l + w - 1));
+    const foes = bases * (2 + (l > 1 ? 1 : 0) + (w >= 2 ? 1 : 0));
+    const blds = (1 + Math.min(1, l)) + (2 + (w > 1 ? 1 : 0)) + bases;
+    stats = `🥚 ~${eggs} eggs · 👹 ${foes} foes<br>🏠 ${blds} buildings · 🪜 sky platform<br>${bases ? ('⚔️ ' + bases + ' enemy base' + (bases > 1 ? 's' : '')) : '😌 no enemy bases'}`;
+  }
+  document.getElementById('previewStats').innerHTML = stats;
+  drawPreview(w, l, isBoss);
+}
+
+// Second Three.js renderer that draws a real 3D snapshot of the level into the panel.
+let pv = null;
+function initPreview() {
+  if (pv) return;
+  const canvas = document.getElementById('previewCanvas');
+  const r = new THREE.WebGLRenderer({ canvas, antialias: true });
+  r.setSize(220, 150, false);
+  const sc = new THREE.Scene();
+  const cam = new THREE.PerspectiveCamera(48, 220 / 150, 0.1, 300);
+  cam.position.set(0, 18, 17); cam.lookAt(0, 1, -3);
+  sc.add(new THREE.AmbientLight(0xffffff, 0.72));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.85); dir.position.set(9, 20, 8); sc.add(dir);
+  const content = new THREE.Group(); sc.add(content);
+  pv = { r, sc, cam, content, last: '' };
+}
+
+function drawPreview(w, l, isBoss) {
+  initPreview();
+  const key = w + '-' + l;
+  if (pv.last === key) { pv.r.render(pv.sc, pv.cam); return; }
+  pv.last = key;
+  const world = WORLDS[w];
+  pv.sc.background = new THREE.Color(world.sky);
+  pv.sc.fog = new THREE.Fog(world.fog, 30, 80);
+
+  const c = pv.content;
+  c.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.dispose()); });
+  while (c.children.length) c.remove(c.children[0]);
+
+  // ground + a backdrop row of mountains
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(70, 70), new THREE.MeshStandardMaterial({ color: world.ground, roughness: 0.95 }));
+  ground.rotation.x = -Math.PI / 2; c.add(ground);
+  const mrng = makeRNG((w + 1) * 91 + (l + 1) * 7);
+  for (let i = 0; i < 7; i++) { const m = buildMountain(world, mrng); m.position.set(-20 + i * 6.5, 0, -18 - mrng() * 3); c.add(m); }
+
+  const rng = makeRNG((w + 1) * 1000 + (l + 1) * 37 + (LEVEL_SEED_SALT[key] || 0));
+  const rx = () => (rng() * 2 - 1) * 9;
+  const rz = () => -2 - rng() * 9;
+
+  if (isBoss) {
+    for (const rr of [9, 5]) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(rr, 0.3, 8, 40),
+        new THREE.MeshStandardMaterial({ color: 0xffd34d, emissive: 0x884400, emissiveIntensity: 0.5 }));
+      ring.rotation.x = -Math.PI / 2; ring.position.set(0, 0.1, -5); c.add(ring);
+    }
+    for (let i = 0; i < 6; i++) { const a = i / 6 * 6.28; const pil = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.9, 3, 7), new THREE.MeshStandardMaterial({ color: world.obstacleColor, flatShading: true })); pil.position.set(Math.cos(a) * 9, 1.5, -5 + Math.sin(a) * 9); c.add(pil); }
+    const boss = buildBoss(world, w); boss.position.set(0, 0, -6); c.add(boss);
+    const p = buildPortal(world); p.position.set(0, 0, 4); c.add(p);
+  } else {
+    const eggN = Math.min(6, world.baseFish);
+    for (let i = 0; i < eggN; i++) { const e = buildEgg(); e.position.set(rx(), 1.2, rz()); c.add(e); }
+    for (let i = 0; i < 4; i++) { const o = buildObstacle(world); o.position.set(rx(), 0, rz()); o.rotation.y = rng() * 6; c.add(o); }
+    const bld = (l % 2 === 0) ? buildCave(world) : buildHouse(world); bld.position.set((rng() * 2 - 1) * 5, 0, -9); bld.rotation.y = Math.atan2(0, 1); c.add(bld);
+    const bases = Math.min(3, Math.max(0, l + w - 1));
+    if (bases) { const en = buildEnemy(world, Math.min(3, w), WORLD_KINDS[Math.min(3, w)][0]); en.position.set(rx(), 0, rz()); c.add(en); }
+    const p = buildPortal(world); p.position.set(0, 0, -12); c.add(p);
+  }
+
+  // your equipped penguin, front and centre
+  const peng = buildPenguin(); peng.position.set(0, 0, 5); peng.rotation.y = Math.PI; peng.scale.setScalar(0.95);
+  paintSkin(peng, state.equipped); c.add(peng);
+
+  pv.r.render(pv.sc, pv.cam);
+}
+
+function playLevel(w, l) {
+  hideAll();
+  document.getElementById('hud').classList.remove('hidden');
+  state.inTutorial = false; state.rally = false; state.rallyAll = false; state.playground = false;
+  state.worldIndex = w; state.levelIndex = l;
+  buildLevel();
+  state.running = true;
+}
+
+// ---- Boss Rally: fight any world boss, or all of them in a gauntlet ----
+function openBossRally(header) {
+  document.getElementById('brHeader').textContent = header || '⚔️ BOSS RALLY';
+  const grid = document.getElementById('bossGrid');
+  grid.innerHTML = '';
+  WORLDS.forEach((w, wi) => {
+    const row = document.createElement('div'); row.className = 'ls-row';
+    const label = document.createElement('div'); label.className = 'ls-world';
+    label.textContent = `World ${wi + 1}: ${w.name}`; row.appendChild(label);
+    const btns = document.createElement('div'); btns.className = 'ls-btns';
+    const b = document.createElement('button'); b.className = 'ls-btn boss';
+    b.textContent = '👑 ' + BOSS_NAMES[wi];
+    b.onclick = () => { state.rallyAll = false; startBossFight(wi); };
+    btns.appendChild(b); row.appendChild(btns); grid.appendChild(row);
+  });
+  show('bossRally');
+}
+
+function startBossFight(w) {
+  hideAll();
+  document.getElementById('hud').classList.remove('hidden');
+  state.rally = true; state.inTutorial = false; state.playground = false;
+  state.worldIndex = w; state.levelIndex = WORLDS[w].levels - 1;   // the world's boss arena
+  buildLevel();
+  state.running = true;
+}
+
+function startBossGauntlet() {
+  state.rallyAll = true;
+  state.rallyQueue = [0, 1, 2, 3];
+  nextRally();
+}
+
+function nextRally() {
+  if (state.rallyQueue.length === 0) {   // gauntlet finished
+    state.rally = false; state.rallyAll = false;
+    document.getElementById('hud').classList.add('hidden');
+    openBossRally('🏆 GAUNTLET CLEARED! Pick another');
+    return;
+  }
+  startBossFight(state.rallyQueue.shift());
+}
+
+// ---- Playground (practice sandbox) ----
+function openPlayground() {
+  const grid = document.getElementById('pgGrid');
+  grid.innerHTML = '';
+  const mkRow = (title, items) => {
+    const row = document.createElement('div'); row.className = 'ls-row';
+    const lab = document.createElement('div'); lab.className = 'ls-world'; lab.textContent = title; row.appendChild(lab);
+    const btns = document.createElement('div'); btns.className = 'ls-btns';
+    items.forEach(it => { const b = document.createElement('button'); b.className = 'ls-btn' + (it.boss ? ' boss' : ''); b.textContent = it.label; b.onclick = it.fn; btns.appendChild(b); });
+    row.appendChild(btns); grid.appendChild(row);
+  };
+  mkRow('Enemy Arenas', WORLDS.map((w, wi) => ({ label: w.name, fn: () => startPlayground('enemies', wi) })));
+  mkRow('Boss Practice', WORLDS.map((w, wi) => ({ label: '👑 ' + BOSS_NAMES[wi], boss: true, fn: () => startPlayground('boss', wi) })));
+  show('playground');
+}
+
+function startPlayground(mode, w) {
+  hideAll();
+  document.getElementById('hud').classList.remove('hidden');
+  state.playground = true; state.pgMode = mode; state.pgWorld = w;
+  state.inTutorial = false; state.rally = false; state.pgBossTimer = 0;
+  buildPlaygroundLevel();
+  state.running = true;
+}
+
+function buildPlaygroundLevel() {
+  clearLevel();
+  const w = state.pgWorld, world = WORLDS[w];
+  setupArena(world, 700 + w * 13);
+  state.bossLevel = false;
+  state.fishTotal = 0; state.fishGot = 0;
+  // a few cover obstacles
+  const rng = makeRNG(4242 + w * 31 + (state.pgMode === 'boss' ? 1 : 0));
+  if (state.pgMode === 'boss') {
+    buildBattleground(world);
+  } else {
+    for (let i = 0; i < 6; i++) { const o = buildObstacle(world); const a = i / 6 * 6.28; o.position.set(Math.cos(a) * 11, 0, Math.sin(a) * 11); o.rotation.y = rng() * 6; levelGroup.add(o); obstacles.push({ group: o, x: o.position.x, z: o.position.z, r: o.userData.radius || 1.1 }); }
+  }
+  // all power-ups ringed around spawn
+  addPowerup(-7, 4, 'sword', 0); addPowerup(7, 4, 'bow', 1);
+  addPowerup(-7, -4, 'icicle', 2); addPowerup(7, -4, 'flame', 3);
+  addPowerup(0, 7, 'hammer', 1.5);
+
+  resetPenguin();
+
+  if (state.pgMode === 'boss') {
+    state.worldIndex = w; state.levelIndex = WORLDS[w].levels - 1;  // for boss HP scaling/name
+    spawnBoss();
+  } else {
+    // endless practice foes of this world's kinds (they auto-respawn when killed)
+    const pool = WORLD_KINDS[Math.min(WORLD_KINDS.length - 1, w)];
+    for (let i = 0; i < 5; i++) {
+      const a = i / 5 * 6.28; const ex = Math.cos(a) * 13, ez = Math.sin(a) * 13;
+      const kind = pool[i % pool.length], K = ENEMY_KINDS[kind];
+      const e = buildEnemy(world, Math.min(3, w), kind);
+      e.position.set(ex, 0, ez); levelGroup.add(e);
+      enemies.push({ group: e, x: ex, z: ez, baseX: ex, baseZ: ez, phase: rng() * 6, alive: true, respawn: 0, hp: K.hpMul * 2, maxHp: K.hpMul * 2, speed: K.speed + w * 0.3, lastHit: -1, frozen: 0, kind, behavior: K.behavior, knockResist: K.knockResist || 0, chargeTimer: 1, dashTime: 0, dashDirX: 0, dashDirZ: 0, shootTimer: 1 });
+    }
+  }
+  updateHUD();
+  showHint(state.pgMode === 'boss' ? 'Boss practice — defeat it as many times as you like!' : 'Practice arena — grab a weapon and have at it!');
+}
+
+// Return to the title screen.
+function goToMainMenu() {
+  state.running = false;
+  state.rally = false; state.rallyAll = false; state.playground = false;
+  state.bossActive = false; state.boss = null;
+  document.getElementById('bossBar').style.visibility = 'hidden';
+  document.getElementById('hud').classList.add('hidden');
+  hideAll();
+  show('startScreen');
+}
+
+// ---- Save / load progress (coins + owned skins + equipped) ----
+function saveProgress() {
+  try {
+    localStorage.setItem('pip_coins', String(state.coins));
+    localStorage.setItem('pip_owned', JSON.stringify([...state.owned]));
+    localStorage.setItem('pip_skin', state.equipped);
+  } catch (e) {}
+}
+function loadProgress() {
+  try {
+    state.coins = parseInt(localStorage.getItem('pip_coins') || '0', 10) || 0;
+    const owned = JSON.parse(localStorage.getItem('pip_owned') || '["classic"]');
+    state.owned = new Set(Array.isArray(owned) ? owned : ['classic']);
+    state.equipped = localStorage.getItem('pip_skin') || 'classic';
+  } catch (e) {
+    state.coins = 0; state.owned = new Set(['classic']); state.equipped = 'classic';
+  }
+  if (!state.owned.has('classic')) state.owned.add('classic');
+}
+
+// ---- Skin shop ----
+function openShop() {
+  document.getElementById('shopCoins').textContent = '🥚 ' + state.coins;
+  const grid = document.getElementById('shopGrid');
+  grid.innerHTML = '';
+  for (const s of SKINS) {
+    const owned = state.owned.has(s.id);
+    const equipped = state.equipped === s.id;
+    const card = document.createElement('div');
+    card.style.cssText = 'background:rgba(10,18,38,.6);border:2px solid ' + (equipped ? '#ffd34d' : 'rgba(120,160,230,.3)') + ';border-radius:12px;padding:8px;text-align:center';
+    const bodyHex = '#' + s.body.toString(16).padStart(6, '0');
+    const bellyHex = '#' + s.belly.toString(16).padStart(6, '0');
+    const trimHex = '#' + s.trim.toString(16).padStart(6, '0');
+    const sw = document.createElement('div');
+    sw.style.cssText = 'height:54px;border-radius:10px;margin-bottom:6px;background:linear-gradient(135deg,' + bodyHex + ' 55%,' + bellyHex + ' 55%);position:relative;border:1px solid rgba(0,0,0,.3)';
+    sw.innerHTML = '<div style="position:absolute;right:8px;top:18px;width:14px;height:14px;border-radius:50%;background:' + trimHex + '"></div>';
+    card.appendChild(sw);
+    const nm = document.createElement('div'); nm.textContent = s.name; nm.style.cssText = 'font-size:13px;font-weight:700;color:#dceaff;margin-bottom:5px'; card.appendChild(nm);
+    const btn = document.createElement('button');
+    btn.style.cssText = 'width:100%;padding:6px;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px';
+    if (equipped) { btn.textContent = 'Equipped ✓'; btn.style.background = '#ffd34d'; btn.style.color = '#5a3d00'; btn.disabled = true; }
+    else if (owned) { btn.textContent = 'Equip'; btn.style.background = 'linear-gradient(180deg,#b6e88a,#6fc23a)'; btn.style.color = '#143a08'; btn.onclick = () => { applySkin(s.id); saveProgress(); openShop(); }; }
+    else { const afford = state.coins >= s.price; btn.textContent = '🥚 ' + s.price; btn.style.background = afford ? 'linear-gradient(180deg,#ffe680,#ffc233)' : '#2a3a55'; btn.style.color = afford ? '#5a3d00' : '#6a7da0'; btn.disabled = !afford; btn.onclick = () => buySkin(s); }
+    card.appendChild(btn);
+    grid.appendChild(card);
+  }
+  show('shop');
+}
+function buySkin(s) {
+  if (state.coins < s.price || state.owned.has(s.id)) return;
+  state.coins -= s.price;
+  state.owned.add(s.id);
+  applySkin(s.id);     // auto-equip on purchase
+  saveProgress();
+  openShop();
+}
+
+function nextLevel() {
+  hideAll();
+  if (state.inTutorial) {
+    if (state.tutDone) {                 // finished the lessons → open the level menu
+      state.inTutorial = false;
+      state.maxUnlocked = Math.max(state.maxUnlocked, 0);   // unlock World 1, Level 1
+      openLevelSelect('Training complete! 🐧 Pick a level');
+    } else {
+      buildTutorialLevel();
+      state.running = true;
+    }
+    return;
+  }
+  state.levelIndex++;
+  buildLevel();
+  state.running = true;
+}
+
+function nextWorld() {
+  state.worldIndex++;
+  state.levelIndex = 0;
+  hideAll();
+  buildLevel();
+  state.running = true;
+}
+
+function startGame() {
+  state.worldIndex = 0; state.levelIndex = 0; state.totalCollected = 0;
+  state.inTutorial = true; state.tutIndex = 0; state.tutDone = false;
+  state.rally = false; state.rallyAll = false; state.playground = false;
+  hideAll();
+  document.getElementById('hud').classList.remove('hidden');
+  buildTutorialLevel();
+  state.running = true;
+}
+
+// ============================================================
+//  UI HELPERS
+// ============================================================
+function show(id) { document.getElementById(id).classList.remove('hidden'); }
+function hideAll() {
+  ['startScreen', 'levelComplete', 'worldComplete', 'winScreen', 'gameOver', 'levelSelect', 'bossRally', 'shop', 'playground'].forEach(id =>
+    document.getElementById(id).classList.add('hidden'));
+}
+// Game over → respawn on the SAME level you died on.
+function restartGame() {
+  hideAll();
+  if (state.inTutorial) buildTutorialLevel();
+  else buildLevel();
+  state.running = true;
+}
+function updateHUD() {
+  if (state.playground) {
+    document.getElementById('worldName').textContent = '🎮 Playground';
+    document.getElementById('levelName').textContent = (state.pgMode === 'boss' ? '👑 ' + BOSS_NAMES[state.pgWorld] : WORLDS[state.pgWorld].name + ' foes');
+  } else if (state.inTutorial) {
+    document.getElementById('worldName').textContent = '🎓 ' + TUTORIALS[state.tutIndex].name;
+    document.getElementById('levelName').textContent = `Tutorial ${state.tutIndex + 1} of ${TUT_LEVELS}`;
+  } else {
+    const world = WORLDS[state.worldIndex];
+    document.getElementById('worldName').textContent = `World ${state.worldIndex + 1}: ${world.name}`;
+    document.getElementById('levelName').textContent = state.bossLevel
+      ? '👑 World Boss Battle'
+      : `Level ${state.levelIndex + 1} of ${world.levels}`;
+  }
+  document.getElementById('fishGot').textContent = state.fishGot;
+  document.getElementById('fishTotal').textContent = state.fishTotal;
+  updateHearts();
+  const wc = document.getElementById('weaponCard');
+  if (state.weapon) {
+    wc.style.visibility = 'visible';
+    const w = WEAPONS[state.weapon];
+    document.getElementById('weaponName').textContent = w.label;
+    document.getElementById('weaponName').style.color = w.color;
+    document.getElementById('weaponAmmo').textContent = state.playground
+      ? '∞ practice'
+      : (state.weapon === 'shield' ? state.ammo + ' blocks left' : state.ammo + ' uses left');
+  } else {
+    wc.style.visibility = 'hidden';
+  }
+}
+let hintTimer = null;
+function showHint(text) {
+  const el = document.getElementById('hint');
+  if (!text) { el.classList.add('hidden'); return; }
+  el.textContent = text; el.classList.remove('hidden'); el.style.opacity = '1';
+  clearTimeout(hintTimer);
+  hintTimer = setTimeout(() => { el.style.opacity = '0'; }, 3200);
+}
+function bigFlash(text) {
+  const el = document.getElementById('flash');
+  el.textContent = text; el.style.opacity = '1';
+  setTimeout(() => { el.style.opacity = '0'; }, 900);
+}
+
+document.getElementById('startBtn').onclick = startGame;
+document.getElementById('nextBtn').onclick = nextLevel;
+document.getElementById('nextWorldBtn').onclick = nextWorld;
+document.getElementById('playAgainBtn').onclick = startGame;
+document.getElementById('retryBtn').onclick = restartGame;
+document.getElementById('levelSelectBtn').onclick = () => openLevelSelect('🗺️ Select a Level');
+document.getElementById('lsMenuBtn').onclick = goToMainMenu;
+document.getElementById('menuBtn').onclick = () => { state.running = false; openLevelSelect('⏸ Paused — Select a Level'); };
+document.getElementById('bossRallyBtn').onclick = () => openBossRally('⚔️ BOSS RALLY');
+document.getElementById('brAllBtn').onclick = startBossGauntlet;
+document.getElementById('brMenuBtn').onclick = goToMainMenu;
+document.getElementById('shopBtn').onclick = openShop;
+document.getElementById('shopMenuBtn').onclick = goToMainMenu;
+document.getElementById('playgroundBtn').onclick = openPlayground;
+document.getElementById('pgMenuBtn').onclick = goToMainMenu;
+
+// load saved coins/skins and apply the equipped skin
+loadProgress();
+applySkin(state.equipped);
+
+// ============================================================
+//  RENDER LOOP & RESIZE
+// ============================================================
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+// initial camera
+camera.position.set(0, 26, 16);
+camera.lookAt(0, 0, 0);
+
+function loop() {
+  requestAnimationFrame(loop);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  update(dt);
+  renderer.render(scene, camera);
+}
+loop();
+</script>
+</body>
+</html>
